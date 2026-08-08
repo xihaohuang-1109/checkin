@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../../api/client';
 import { useDeviceId } from './useDeviceId';
@@ -24,17 +24,21 @@ export function PublicFormPage() {
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Geofence
-  const geofenceConfig =
-    instance?.geofenceLat != null &&
-    instance?.geofenceLng != null &&
-    instance?.geofenceRadiusM != null
-      ? {
-          lat: instance.geofenceLat,
-          lng: instance.geofenceLng,
-          radiusM: instance.geofenceRadiusM,
-        }
-      : null;
+  // Geofence — memoize config to prevent infinite re-render loop
+  const geofenceConfig = useMemo(() => {
+    if (
+      instance?.geofenceLat != null &&
+      instance?.geofenceLng != null &&
+      instance?.geofenceRadiusM != null
+    ) {
+      return {
+        lat: instance.geofenceLat,
+        lng: instance.geofenceLng,
+        radiusM: instance.geofenceRadiusM,
+      };
+    }
+    return null;
+  }, [instance?.geofenceLat, instance?.geofenceLng, instance?.geofenceRadiusM]);
 
   const geofence = useGeofence(geofenceConfig);
 

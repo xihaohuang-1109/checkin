@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useState } from 'react';
 
 /**
  * Persist a device ID across localStorage and cookie for dual durability.
@@ -6,13 +6,9 @@ import { useEffect, useRef } from 'react';
  * Mirror between localStorage and a cookie for maximum persistence.
  */
 export function useDeviceId(): string {
-  const deviceIdRef = useRef<string>('');
-
-  if (!deviceIdRef.current) {
-    deviceIdRef.current = getOrCreateDeviceId();
-  }
-
-  return deviceIdRef.current;
+  // Lazy initializer: runs once, no side effects on re-renders
+  const [deviceId] = useState(() => getOrCreateDeviceId());
+  return deviceId;
 }
 
 function getOrCreateDeviceId(): string {
@@ -20,7 +16,10 @@ function getOrCreateDeviceId(): string {
   const LS_KEY = 'checkin_device_id';
 
   // Try localStorage first (most reliable)
-  let deviceId = localStorage.getItem(LS_KEY);
+  let deviceId: string | null = null;
+  try {
+    deviceId = localStorage.getItem(LS_KEY);
+  } catch { /* private mode */ }
 
   // Try cookie as fallback
   if (!deviceId) {
