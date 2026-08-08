@@ -86,6 +86,12 @@ export const api = {
   bootstrapBitable() {
     return request('/admin/bootstrap-bitable', { method: 'POST' });
   },
+  setBitableConfig(appToken: string, recordsTableId: string, qrcodesTableId?: string) {
+    return request('/admin/set-bitable-config', {
+      method: 'POST',
+      body: JSON.stringify({ appToken, recordsTableId, qrcodesTableId }),
+    });
+  },
   retrySync() {
     return request('/admin/retry-sync', { method: 'POST' });
   },

@@ -30,6 +30,10 @@ export function AdminDashboardPage() {
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [duplicates, setDuplicates] = useState<any[]>([]);
   const [syncing, setSyncing] = useState(false);
+  const [showManualConfig, setShowManualConfig] = useState(false);
+  const [manualAppToken, setManualAppToken] = useState('');
+  const [manualRecordsTableId, setManualRecordsTableId] = useState('');
+  const [manualQrcodesTableId, setManualQrcodesTableId] = useState('');
 
   // Check auth
   useEffect(() => {
@@ -130,6 +134,26 @@ export function AdminDashboardPage() {
     }
   };
 
+  // Manual Bitable config
+  const handleManualConfig = async () => {
+    if (!manualAppToken.trim() || !manualRecordsTableId.trim()) {
+      alert('请填写 App Token 和记录表 ID');
+      return;
+    }
+    try {
+      await api.setBitableConfig(
+        manualAppToken.trim(),
+        manualRecordsTableId.trim(),
+        manualQrcodesTableId.trim() || undefined
+      );
+      alert('多维表格配置成功！');
+      setShowManualConfig(false);
+      await loadData();
+    } catch (err: any) {
+      alert(`配置失败: ${err.message}`);
+    }
+  };
+
   // Logout
   const handleLogout = async () => {
     await api.logout();
@@ -177,15 +201,62 @@ export function AdminDashboardPage() {
       {!bitableStatus?.bootstrapped && (
         <div className="alert alert-info">
           <div className="flex-between">
-            <span>⚠️ 飞书多维表格尚未初始化，请先创建「伙伴赋能培训签到信息表」</span>
-            <button
-              className="btn btn-primary"
-              onClick={handleBootstrap}
-              disabled={bootstrapping}
-            >
-              {bootstrapping ? '初始化中...' : '初始化多维表格'}
-            </button>
+            <span>⚠️ 飞书多维表格尚未初始化</span>
+            <div className="flex-row" style={{ gap: 8 }}>
+              <button
+                className="btn btn-primary"
+                onClick={handleBootstrap}
+                disabled={bootstrapping}
+              >
+                {bootstrapping ? '初始化中...' : '自动创建多维表格'}
+              </button>
+              <button
+                className="btn btn-outline"
+                onClick={() => setShowManualConfig(!showManualConfig)}
+              >
+                {showManualConfig ? '取消' : '手动配置已有表格'}
+              </button>
+            </div>
           </div>
+          {showManualConfig && (
+            <div style={{ marginTop: 12, padding: 12, background: 'var(--color-bg)', borderRadius: 8 }}>
+              <p className="text-sm text-secondary" style={{ marginBottom: 8 }}>
+                从飞书多维表格 URL 中提取参数。URL 格式如：
+                <br />
+                <code>https://xxx.feishu.cn/base/APP_TOKEN?table=TABLE_ID</code>
+              </p>
+              <div className="form-group">
+                <label className="text-sm">App Token (base/ 后面那段)</label>
+                <input
+                  className="input"
+                  value={manualAppToken}
+                  onChange={(e) => setManualAppToken(e.target.value)}
+                  placeholder="DYnxb3HPoaD8nsso53JcNFUFnzb"
+                />
+              </div>
+              <div className="form-group">
+                <label className="text-sm">签到记录表 ID (table= 参数)</label>
+                <input
+                  className="input"
+                  value={manualRecordsTableId}
+                  onChange={(e) => setManualRecordsTableId(e.target.value)}
+                  placeholder="tblZGp1EbjYWaxBV"
+                />
+              </div>
+              <div className="form-group">
+                <label className="text-sm">签到码表 ID (可选)</label>
+                <input
+                  className="input"
+                  value={manualQrcodesTableId}
+                  onChange={(e) => setManualQrcodesTableId(e.target.value)}
+                  placeholder="可选"
+                />
+              </div>
+              <button className="btn btn-primary" onClick={handleManualConfig}>
+                保存配置
+              </button>
+            </div>
+          )}
         </div>
       )}
 

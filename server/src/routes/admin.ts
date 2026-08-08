@@ -402,6 +402,40 @@ router.get('/bitable-status', async (_req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/admin/set-bitable-config
+ * Manually configure an existing Bitable (skip auto-bootstrap).
+ */
+router.post('/set-bitable-config', async (req: Request, res: Response) => {
+  const db = getDb();
+  const { appToken, recordsTableId, qrcodesTableId } = req.body;
+
+  if (!appToken || !recordsTableId) {
+    res.status(400).json({ error: 'appToken and recordsTableId are required' });
+    return;
+  }
+
+  await db.appConfig.upsert({
+    where: { key: 'bitable_app_token' },
+    update: { value: appToken },
+    create: { key: 'bitable_app_token', value: appToken },
+  });
+  await db.appConfig.upsert({
+    where: { key: 'bitable_records_table_id' },
+    update: { value: recordsTableId },
+    create: { key: 'bitable_records_table_id', value: recordsTableId },
+  });
+  if (qrcodesTableId) {
+    await db.appConfig.upsert({
+      where: { key: 'bitable_qrcodes_table_id' },
+      update: { value: qrcodesTableId },
+      create: { key: 'bitable_qrcodes_table_id', value: qrcodesTableId },
+    });
+  }
+
+  res.json({ success: true, appToken, recordsTableId, qrcodesTableId: qrcodesTableId || null });
+});
+
+/**
  * POST /api/admin/retry-sync
  * Retry syncing all pending/failed submissions to Bitable
  */
