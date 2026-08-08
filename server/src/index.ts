@@ -1,6 +1,7 @@
 import { createApp } from './app';
 import { getEnv } from './config/env';
 import { disconnectDb } from './db/client';
+import { retryFailedSyncs } from './services/syncQueue';
 
 async function main() {
   const env = getEnv();
@@ -9,6 +10,18 @@ async function main() {
   const server = app.listen(env.PORT, () => {
     console.log(`🚀 Server running at http://localhost:${env.PORT}`);
   });
+
+  // Retry any pending syncs on startup (after a brief delay to let DB settle)
+  setTimeout(async () => {
+    try {
+      const result = await retryFailedSyncs();
+      if (result.total > 0) {
+        console.log(`[Startup] Retried ${result.total} pending syncs: ${result.succeeded} succeeded`);
+      }
+    } catch (err) {
+      console.error('[Startup] Failed to retry syncs:', err);
+    }
+  }, 3000);
 
   // Graceful shutdown
   const shutdown = async () => {

@@ -29,6 +29,7 @@ export function AdminDashboardPage() {
   const [activeTab, setActiveTab] = useState<'instances' | 'submissions' | 'duplicates'>('instances');
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [duplicates, setDuplicates] = useState<any[]>([]);
+  const [syncing, setSyncing] = useState(false);
 
   // Check auth
   useEffect(() => {
@@ -112,6 +113,20 @@ export function AdminDashboardPage() {
       await loadSubmissions();
     } catch (err: any) {
       alert(`操作失败: ${err.message}`);
+    }
+  };
+
+  // Retry sync
+  const handleRetrySync = async () => {
+    setSyncing(true);
+    try {
+      const result = await api.retrySync();
+      alert(`同步完成: ${result.succeeded}/${result.total} 条记录已同步`);
+      await loadSubmissions();
+    } catch (err: any) {
+      alert(`同步失败: ${err.message}`);
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -286,6 +301,16 @@ export function AdminDashboardPage() {
       {activeTab === 'submissions' && (
         <>
           <h2 style={{ fontSize: 16, marginBottom: 16 }}>提交记录</h2>
+          <div className="flex-between mb-16">
+            <span className="text-sm text-secondary">共 {submissions.length} 条记录</span>
+            <button
+              className="btn btn-outline"
+              onClick={handleRetrySync}
+              disabled={syncing}
+            >
+              {syncing ? '同步中...' : '🔄 同步到多维表格'}
+            </button>
+          </div>
           {submissions.length === 0 ? (
             <div className="card text-center" style={{ padding: 40 }}>
               <p className="text-secondary">暂无提交记录</p>

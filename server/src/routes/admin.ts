@@ -401,4 +401,19 @@ router.get('/bitable-status', async (_req: Request, res: Response) => {
   });
 });
 
+/**
+ * POST /api/admin/retry-sync
+ * Retry syncing all pending/failed submissions to Bitable
+ */
+router.post('/retry-sync', async (_req: Request, res: Response) => {
+  try {
+    const { retryFailedSyncs } = await import('../services/syncQueue');
+    const result = await retryFailedSyncs();
+    res.json(result);
+  } catch (err: any) {
+    console.error('[RetrySync] Failed:', err);
+    res.status(500).json({ error: err.message || 'Retry sync failed' });
+  }
+});
+
 export default router;

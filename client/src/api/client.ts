@@ -86,4 +86,7 @@ export const api = {
   bootstrapBitable() {
     return request('/admin/bootstrap-bitable', { method: 'POST' });
   },
+  retrySync() {
+    return request('/admin/retry-sync', { method: 'POST' });
+  },
 };
