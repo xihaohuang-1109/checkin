@@ -47,4 +47,4 @@ EXPOSE 3000
 ENV NODE_ENV=production
 
 # Push DB schema then start
-CMD ["sh", "-c", "cd server && npx prisma db push --skip-generate && node dist/index.js"]
+CMD ["sh", "-c", "cd server && npx prisma db push --skip-generate && node dist/server/src/index.js"]
