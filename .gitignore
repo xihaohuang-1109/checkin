@@ -3,4 +3,4 @@ dist/
 *.db
 *.db-journal
 .env
-!.env.example
+!.env.example*.tsbuildinfo
