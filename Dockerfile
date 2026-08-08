@@ -32,8 +32,8 @@ COPY --from=server-builder /app/server/package.json ./server/package.json
 COPY --from=server-builder /app/node_modules ./node_modules
 COPY --from=server-builder /app/shared ./shared
 
-# Copy client dist
-COPY --from=client-builder /app/client/dist ./client/dist
+# Copy client dist (place where server app.ts expects it)
+COPY --from=client-builder /app/client/dist ./server/dist/client/dist
 
 # Generate Prisma client in runtime
 RUN cd server && npx prisma generate
