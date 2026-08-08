@@ -1,0 +1,79 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model AdminUser {
+  id                     String    @id @default(uuid())
+  feishuOpenId           String    @unique
+  feishuUnionId          String?
+  name                   String?
+  avatarUrl              String?
+  userAccessTokenEnc     String?
+  refreshTokenEnc        String?
+  tokenExpiresAt         DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  sessions               Session[]
+  formInstances           FormInstance[]
+}
+
+model Session {
+  id           String    @id @default(uuid())
+  adminUserId  String
+  adminUser    AdminUser @relation(fields: [adminUserId], references: [id])
+  expiresAt    DateTime
+  createdAt    DateTime  @default(now())
+}
+
+model FormInstance {
+  id                  String       @id @default(uuid())
+  primaryTitle        String
+  secondaryTitle      String
+  fieldsConfig        String       // JSON: FieldConfig[]
+  geofenceLat         Float?
+  geofenceLng         Float?
+  geofenceRadiusM     Float?
+  qrToken             String?
+  qrExpiresAt         DateTime?
+  qrStatus            String?      // "active" | "expired"
+  bitableAppToken     String?
+  bitableRecordsTableId String?
+  bitableQrcodesTableId String?
+  bitableViewId       String?
+  createdByAdminId    String?
+  createdByAdmin      AdminUser?   @relation(fields: [createdByAdminId], references: [id])
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+  submissions         Submission[]
+}
+
+model Submission {
+  id                String        @id @default(uuid())
+  formInstanceId    String
+  formInstance      FormInstance  @relation(fields: [formInstanceId], references: [id])
+  deviceId          String
+  submittedFields   String        // JSON
+  clientLat         Float?
+  clientLng         Float?
+  clientAccuracy    Float?
+  submittedAt       DateTime      @default(now())
+  ipHash            String?
+  userAgent         String?
+  possibleDuplicate Boolean       @default(false)
+  syncStatus        String        @default("pending") // "pending" | "synced" | "failed"
+  bitableRecordId   String?
+  syncError         String?
+  createdAt         DateTime      @default(now())
+
+  @@unique([formInstanceId, deviceId])
+}
+
+model AppConfig {
+  key   String @id
+  value String
+}
