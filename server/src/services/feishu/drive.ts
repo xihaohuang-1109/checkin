@@ -283,6 +283,8 @@ export async function createBitableRecord(
 ): Promise<string> {
   const token = await getTenantAccessToken();
 
+  console.log(`[Bitable] Creating record in table=${tableId} with fields=${JSON.stringify(fields)}`);
+
   const data = await feishuRequest<any>(
     `/bitable/v1/apps/${appToken}/tables/${tableId}/records`,
     {
@@ -293,7 +295,7 @@ export async function createBitableRecord(
   );
 
   if (data.code !== 0) {
-    throw new Error(`Create record failed: ${data.msg}`);
+    throw new Error(`Create record failed (code=${data.code}): ${data.msg}`);
   }
 
   return data.data.record.record_id;

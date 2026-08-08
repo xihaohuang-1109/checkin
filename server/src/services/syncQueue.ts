@@ -41,13 +41,21 @@ export async function syncSubmissionToBitable(submissionId: string): Promise<voi
   const fieldsConfig: FieldConfig[] = JSON.parse(instance.fieldsConfig || '[]');
 
   try {
-    // Ensure the view exists for this 一级标题
-    await ensureView(appToken, tableId, instance.primaryTitle);
+    // Ensure the view exists for this 一级标题 (non-fatal: table may already have views)
+    try {
+      await ensureView(appToken, tableId, instance.primaryTitle);
+    } catch (viewErr: any) {
+      console.warn(`[SyncQueue] View ensure failed (non-fatal): ${viewErr.message}`);
+    }
 
-    // Ensure all dynamic fields exist in the Bitable table
+    // Ensure all dynamic fields exist in the Bitable table (non-fatal)
     for (const field of fieldsConfig) {
-      const fieldType = field.type === 'select' ? 3 : field.type === 'tel' ? 13 : 1;
-      await ensureField(appToken, tableId, field.label, fieldType);
+      try {
+        const fieldType = field.type === 'select' ? 3 : field.type === 'tel' ? 13 : 1;
+        await ensureField(appToken, tableId, field.label, fieldType);
+      } catch (fieldErr: any) {
+        console.warn(`[SyncQueue] Field ensure "${field.label}" failed (non-fatal): ${fieldErr.message}`);
+      }
     }
 
     // Build record fields
