@@ -299,6 +299,7 @@ router.get('/submissions', async (req: Request, res: Response) => {
       clientAccuracy: s.clientAccuracy,
       submittedAt: s.submittedAt.toISOString(),
       syncStatus: s.syncStatus,
+      syncError: s.syncError || null,
       possibleDuplicate: s.possibleDuplicate,
       createdAt: s.createdAt.toISOString(),
     })),

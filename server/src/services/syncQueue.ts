@@ -80,13 +80,17 @@ export async function syncSubmissionToBitable(submissionId: string): Promise<voi
 
     console.log(`[SyncQueue] Submission ${submissionId} synced -> Bitable record ${recordId}`);
   } catch (err: any) {
-    console.error(`[SyncQueue] Failed to sync submission ${submissionId}:`, err.message);
+    const errorMsg = err.message?.substring(0, 500) || 'Unknown error';
+    console.error(`[SyncQueue] Failed to sync submission ${submissionId}:`, errorMsg);
+    if (err.response) {
+      console.error(`[SyncQueue] API response body:`, JSON.stringify(err.response).substring(0, 500));
+    }
 
     await db.submission.update({
       where: { id: submissionId },
       data: {
         syncStatus: 'failed',
-        syncError: err.message?.substring(0, 500),
+        syncError: errorMsg,
       },
     });
   }

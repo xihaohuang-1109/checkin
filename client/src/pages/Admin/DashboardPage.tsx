@@ -396,6 +396,7 @@ export function AdminDashboardPage() {
                     <th>提交时间</th>
                     <th>同步状态</th>
                     <th>疑似重复</th>
+                    <th>错误信息</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -410,7 +411,7 @@ export function AdminDashboardPage() {
                         {sub.syncStatus === 'synced' ? (
                           <span className="badge badge-success">已同步</span>
                         ) : sub.syncStatus === 'failed' ? (
-                          <span className="badge badge-danger">失败</span>
+                          <span className="badge badge-danger" title={sub.syncError || ''}>失败</span>
                         ) : (
                           <span className="badge badge-warning">待同步</span>
                         )}
@@ -421,6 +422,9 @@ export function AdminDashboardPage() {
                         ) : (
                           <span className="badge badge-success">正常</span>
                         )}
+                      </td>
+                      <td className="text-sm text-secondary" style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {sub.syncError || '-'}
                       </td>
                     </tr>
                   ))}
