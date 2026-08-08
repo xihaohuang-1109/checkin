@@ -30,7 +30,6 @@ COPY --from=server-builder /app/server/dist ./server/dist
 COPY --from=server-builder /app/server/prisma ./server/prisma
 COPY --from=server-builder /app/server/package.json ./server/package.json
 COPY --from=server-builder /app/node_modules ./node_modules
-COPY --from=server-builder /app/server/node_modules ./server/node_modules
 COPY --from=server-builder /app/shared ./shared
 
 # Copy client dist
