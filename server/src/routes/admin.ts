@@ -25,7 +25,7 @@ router.get('/form-instances', async (_req: Request, res: Response) => {
   });
 
   res.json({
-    instances: instances.map((i) => ({
+    instances: instances.map((i: any) => ({
       id: i.id,
       primaryTitle: i.primaryTitle,
       secondaryTitle: i.secondaryTitle,
@@ -288,7 +288,7 @@ router.get('/submissions', async (req: Request, res: Response) => {
   });
 
   res.json({
-    submissions: submissions.map((s) => ({
+    submissions: submissions.map((s: any) => ({
       id: s.id,
       formInstanceId: s.formInstanceId,
       formInstance: s.formInstance,

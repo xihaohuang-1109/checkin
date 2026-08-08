@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: checkin
+    env: docker
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: PORT
+        value: "3000"
+      - key: NODE_ENV
+        value: production
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        value: "file:./data/prod.db"
+      - key: DEDUP_IP_SALT
+        generateValue: true
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: FEISHU_APP_ID
+        sync: false
+      - key: FEISHU_APP_SECRET
+        sync: false
+      - key: FEISHU_REDIRECT_URI
+        sync: false
+      - key: FEISHU_BITABLE_NAME
+        value: 伙伴赋能培训签到信息表
+    disk:
+      name: sqlite-data
+      mountPath: /app/server/data
+      sizeGB: 1

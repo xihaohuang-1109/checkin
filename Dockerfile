@@ -18,6 +18,7 @@ COPY server/package*.json server/
 RUN npm install
 COPY shared/ shared/
 COPY server/ server/
+RUN npx prisma generate --schema=server/prisma/schema.prisma
 RUN npm run build -w server
 
 # ---- Runtime ----
@@ -38,10 +39,13 @@ COPY --from=client-builder /app/client/dist ./client/dist
 # Generate Prisma client in runtime
 RUN cd server && npx prisma generate
 
+# Create data directory for SQLite (Render persistent disk mounts here)
+RUN mkdir -p /app/server/data
+
 # Expose port
 ENV PORT=3000
 EXPOSE 3000
 ENV NODE_ENV=production
 
 # Push DB schema then start
-CMD cd server && npx prisma db push && node dist/index.js
+CMD ["sh", "-c", "cd server && npx prisma db push --skip-generate && node dist/index.js"]
