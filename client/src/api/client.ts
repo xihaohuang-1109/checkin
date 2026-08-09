@@ -99,4 +99,10 @@ export const api = {
     const qs = appToken ? `?appToken=${encodeURIComponent(appToken)}` : '';
     return request(`/admin/bitable-tables${qs}`);
   },
+  listAdmins() {
+    return request('/admin/admins');
+  },
+  toggleAdminActive(id: string) {
+    return request(`/admin/admins/${id}/toggle-active`, { method: 'POST' });
+  },
 };

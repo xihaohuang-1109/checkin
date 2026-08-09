@@ -26,7 +26,7 @@ export function AdminDashboardPage() {
   const [instances, setInstances] = useState<FormInstance[]>([]);
   const [bitableStatus, setBitableStatus] = useState<BitableStatus | null>(null);
   const [bootstrapping, setBootstrapping] = useState(false);
-  const [activeTab, setActiveTab] = useState<'instances' | 'submissions' | 'duplicates'>('instances');
+  const [activeTab, setActiveTab] = useState<'instances' | 'submissions' | 'duplicates' | 'admins'>('instances');
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [duplicates, setDuplicates] = useState<any[]>([]);
   const [syncing, setSyncing] = useState(false);
@@ -36,6 +36,7 @@ export function AdminDashboardPage() {
   const [manualQrcodesTableId, setManualQrcodesTableId] = useState('');
   const [availableTables, setAvailableTables] = useState<any[]>([]);
   const [loadingTables, setLoadingTables] = useState(false);
+  const [admins, setAdmins] = useState<any[]>([]);
 
   // Check auth
   useEffect(() => {
@@ -86,6 +87,31 @@ export function AdminDashboardPage() {
       loadSubmissions();
     }
   }, [activeTab, loadSubmissions]);
+
+  // Load admins
+  const loadAdmins = useCallback(async () => {
+    try {
+      const data = await api.listAdmins();
+      setAdmins(data.admins);
+    } catch (err) {
+      console.error('Failed to load admins:', err);
+    }
+  }, []);
+  useEffect(() => {
+    if (activeTab === 'admins' && admin?.isSuperAdmin) {
+      loadAdmins();
+    }
+  }, [activeTab, admin, loadAdmins]);
+
+  const handleToggleAdmin = async (id: string) => {
+    if (!confirm('确定要切换该管理员的状态吗？')) return;
+    try {
+      await api.toggleAdminActive(id);
+      await loadAdmins();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
 
   // Bootstrap Bitable
   const handleBootstrap = async () => {
@@ -327,6 +353,14 @@ export function AdminDashboardPage() {
             </span>
           )}
         </button>
+        {admin?.isSuperAdmin && (
+          <button
+            className={`tab ${activeTab === 'admins' ? 'active' : ''}`}
+            onClick={() => setActiveTab('admins')}
+          >
+            管理员
+          </button>
+        )}
       </div>
 
       {/* ==================== Instances Tab ==================== */}
@@ -513,6 +547,76 @@ export function AdminDashboardPage() {
                         >
                           标记为正常
                         </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ==================== Admins Tab ==================== */}
+      {activeTab === 'admins' && admin?.isSuperAdmin && (
+        <>
+          <h2 style={{ fontSize: 16, marginBottom: 16 }}>管理员列表</h2>
+          <p className="text-sm text-secondary mb-16">
+            其他飞书用户扫码登录后自动成为管理员。超级管理员可以启用/禁用其他管理员。
+          </p>
+          {admins.length === 0 ? (
+            <div className="card text-center" style={{ padding: 40 }}>
+              <p className="text-secondary">暂无管理员</p>
+            </div>
+          ) : (
+            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>姓名</th>
+                    <th>飞书 Open ID</th>
+                    <th>角色</th>
+                    <th>状态</th>
+                    <th>加入时间</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {admins.map((a: any) => (
+                    <tr key={a.id}>
+                      <td style={{ fontWeight: 500 }}>{a.name || '-'}</td>
+                      <td className="text-sm text-secondary">{a.feishuOpenId}</td>
+                      <td>
+                        {a.isSuperAdmin ? (
+                          <span className="badge badge-primary">超级管理员</span>
+                        ) : (
+                          <span className="badge badge-info">管理员</span>
+                        )}
+                      </td>
+                      <td>
+                        {a.isActive ? (
+                          <span className="badge badge-success">启用</span>
+                        ) : (
+                          <span className="badge badge-danger">禁用</span>
+                        )}
+                      </td>
+                      <td className="text-sm text-secondary">
+                        {new Date(a.createdAt).toLocaleDateString('zh-CN')}
+                      </td>
+                      <td>
+                        {!a.isSuperAdmin && (
+                          <button
+                            className="btn btn-outline text-sm"
+                            style={{
+                              padding: '4px 10px',
+                              color: a.isActive ? 'var(--color-danger)' : 'var(--color-success)',
+                              borderColor: a.isActive ? 'var(--color-danger)' : 'var(--color-success)',
+                            }}
+                            onClick={() => handleToggleAdmin(a.id)}
+                          >
+                            {a.isActive ? '禁用' : '启用'}
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}

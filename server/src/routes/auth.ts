@@ -123,6 +123,11 @@ router.get('/feishu/callback', async (req: Request, res: Response) => {
 
     // Upsert admin user
     const tokenExpiresAt = new Date(Date.now() + expiresIn * 1000);
+
+    // Check if this is the first admin ever (becomes super admin)
+    const adminCount = await db.adminUser.count();
+    const isFirstAdmin = adminCount === 0;
+
     const admin = await db.adminUser.upsert({
       where: { feishuOpenId: userInfo.open_id },
       update: {
@@ -141,6 +146,8 @@ router.get('/feishu/callback', async (req: Request, res: Response) => {
         userAccessTokenEnc: userAccessToken,
         refreshTokenEnc: refreshToken || null,
         tokenExpiresAt,
+        isSuperAdmin: isFirstAdmin,
+        isActive: true,
       },
     });
 
@@ -178,6 +185,8 @@ router.get('/me', async (req: Request, res: Response) => {
       name: true,
       avatarUrl: true,
       feishuOpenId: true,
+      isSuperAdmin: true,
+      isActive: true,
     },
   });
 

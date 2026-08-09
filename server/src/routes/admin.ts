@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { getDb } from '../db/client';
-import { requireAdminSession } from '../middleware/requireAdminSession';
+import { requireAdminSession, requireSuperAdmin } from '../middleware/requireAdminSession';
 import { generateQrAndArchive } from '../services/qrService';
 import QRCode from 'qrcode';
 
@@ -493,6 +493,64 @@ router.get('/bitable-tables', async (req: Request, res: Response) => {
     console.error('[ListTables] Failed:', err);
     res.status(500).json({ error: err.message || 'Failed to list tables' });
   }
+});
+
+// ============================================================
+// Admin User Management (super admin only)
+// ============================================================
+
+/**
+ * GET /api/admin/admins
+ * List all admin users (super admin only)
+ */
+router.get('/admins', requireSuperAdmin, async (_req: Request, res: Response) => {
+  const db = getDb();
+  const admins = await db.adminUser.findMany({
+    select: {
+      id: true,
+      name: true,
+      avatarUrl: true,
+      feishuOpenId: true,
+      isActive: true,
+      isSuperAdmin: true,
+      createdAt: true,
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+  res.json({ admins });
+});
+
+/**
+ * POST /api/admin/admins/:id/toggle-active
+ * Enable/disable an admin user (super admin only)
+ */
+router.post('/admins/:id/toggle-active', requireSuperAdmin, async (req: Request, res: Response) => {
+  const db = getDb();
+  const id = req.params.id as string;
+
+  const admin = await db.adminUser.findUnique({ where: { id } });
+  if (!admin) {
+    res.status(404).json({ error: 'Admin not found' });
+    return;
+  }
+
+  if (admin.isSuperAdmin) {
+    res.status(400).json({ error: 'Cannot disable super admin' });
+    return;
+  }
+
+  const updated = await db.adminUser.update({
+    where: { id },
+    data: { isActive: !admin.isActive },
+    select: {
+      id: true,
+      name: true,
+      isActive: true,
+      isSuperAdmin: true,
+    },
+  });
+
+  res.json({ admin: updated });
 });
 
 export default router;

@@ -16,6 +16,8 @@ model AdminUser {
   userAccessTokenEnc     String?
   refreshTokenEnc        String?
   tokenExpiresAt         DateTime?
+  isActive               Boolean   @default(true)
+  isSuperAdmin           Boolean   @default(false)
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
   sessions               Session[]
