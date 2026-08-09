@@ -329,29 +329,145 @@ export function AdminFormEditorPage() {
         </button>
       </div>
 
-      {/* Naming */}
+      {/* Naming + Bitable Table/View */}
       <div className="card">
-        <h2 style={{ fontSize: 16, marginBottom: 16 }}>填报单命名</h2>
+        <h2 style={{ fontSize: 16, marginBottom: 16 }}>填报单命名 & 多维表格关联</h2>
+        <p className="text-sm text-secondary" style={{ marginBottom: 16 }}>
+          一级标题即多维表格中的<strong>表格名称</strong>，二级标题即该表格中的<strong>视图名称</strong>。保存时会自动查找或创建对应的表格和视图。
+        </p>
+
+        {/* App Token */}
         <div className="form-group">
-          <label className="form-label">一级标题 <span className="required">*</span></label>
+          <label className="form-label">多维表格 App Token</label>
+          <input
+            className="form-input"
+            placeholder="从飞书多维表格 URL 中提取 (base/ 后面的部分)"
+            value={bitableAppToken}
+            onChange={(e) => setBitableAppToken(e.target.value)}
+          />
+          {bitableStatus?.appToken && !bitableAppToken && (
+            <p className="form-hint">
+              系统已配置 App Token: {bitableStatus.appToken}，可留空使用默认值
+            </p>
+          )}
+        </div>
+
+        <div className="flex-row" style={{ gap: 8, marginBottom: 16 }}>
+          <button
+            className="btn btn-outline text-sm"
+            onClick={handleListTables}
+            disabled={loadingTables || !bitableAppToken.trim()}
+          >
+            {loadingTables ? '加载中...' : '📋 浏览已有表格'}
+          </button>
+        </div>
+
+        {availableTables.length > 0 && (
+          <div style={{ marginBottom: 16, padding: 8, background: 'var(--color-bg-light)', borderRadius: 6 }}>
+            <p className="text-sm" style={{ marginBottom: 6, fontWeight: 500 }}>已有的表格（点击选中并自动填充一级标题）：</p>
+            {availableTables.map((t: any) => (
+              <div
+                key={t.tableId}
+                className="text-sm"
+                style={{
+                  padding: '6px 10px',
+                  cursor: 'pointer',
+                  borderRadius: 4,
+                  marginBottom: 2,
+                  background: selectedTableId === t.tableId ? 'var(--color-primary-light)' : 'transparent',
+                }}
+                onClick={() => handleSelectTable(t)}
+              >
+                <strong>{t.name}</strong> — <code style={{ fontSize: 11 }}>{t.tableId}</code>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* 一级标题 = Table */}
+        <div className="form-group">
+          <label className="form-label">一级标题 / 表格名称 <span className="required">*</span></label>
           <input
             className="form-input"
             placeholder="例如：2024 伙伴赋能培训"
             value={primaryTitle}
             onChange={(e) => setPrimaryTitle(e.target.value)}
           />
-          <p className="form-hint">不同一级标题的签到记录会归入不同的视图</p>
+          <p className="form-hint">作为多维表格中的表格名称，不同一级标题的签到记录归入不同的表格</p>
         </div>
+
+        {selectedTableId && (
+          <div className="form-group">
+            <label className="form-label">已关联表格 ID</label>
+            <input
+              className="form-input"
+              value={selectedTableId}
+              readOnly
+              style={{ background: 'var(--color-bg-light)', fontSize: 13 }}
+            />
+          </div>
+        )}
+
+        {/* Divider */}
+        <div style={{ borderTop: '1px solid var(--color-border)', margin: '16px 0' }} />
+
+        {selectedTableId && (
+          <div className="flex-row" style={{ gap: 8, marginBottom: 12 }}>
+            <button
+              className="btn btn-outline text-sm"
+              onClick={() => handleListViews(selectedTableId)}
+              disabled={loadingViews}
+            >
+              {loadingViews ? '加载中...' : '📋 浏览该表视图'}
+            </button>
+          </div>
+        )}
+
+        {availableViews.length > 0 && (
+          <div style={{ marginBottom: 16, padding: 8, background: 'var(--color-bg-light)', borderRadius: 6 }}>
+            <p className="text-sm" style={{ marginBottom: 6, fontWeight: 500 }}>该表中的视图（点击选中并自动填充二级标题）：</p>
+            {availableViews.map((v: any) => (
+              <div
+                key={v.viewId}
+                className="text-sm"
+                style={{
+                  padding: '6px 10px',
+                  cursor: 'pointer',
+                  borderRadius: 4,
+                  marginBottom: 2,
+                  background: selectedViewId === v.viewId ? 'var(--color-primary-light)' : 'transparent',
+                }}
+                onClick={() => handleSelectView(v)}
+              >
+                <strong>{v.name}</strong> ({v.type}) — <code style={{ fontSize: 11 }}>{v.viewId}</code>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* 二级标题 = View */}
         <div className="form-group">
-          <label className="form-label">二级标题 <span className="required">*</span></label>
+          <label className="form-label">二级标题 / 视图名称 <span className="required">*</span></label>
           <input
             className="form-input"
             placeholder="例如：8月上海场"
             value={secondaryTitle}
             onChange={(e) => setSecondaryTitle(e.target.value)}
           />
-          <p className="form-hint">同一一级标题下，按二级标题分组</p>
+          <p className="form-hint">作为表格中的视图名称，同一表格下按二级标题分组</p>
         </div>
+
+        {selectedViewId && (
+          <div className="form-group">
+            <label className="form-label">已关联视图 ID</label>
+            <input
+              className="form-input"
+              value={selectedViewId}
+              readOnly
+              style={{ background: 'var(--color-bg-light)', fontSize: 13 }}
+            />
+          </div>
+        )}
       </div>
 
       {/* Fields */}
@@ -528,125 +644,6 @@ export function AdminFormEditorPage() {
             </div>
           </>
         )}
-      </div>
-
-      {/* Bitable Table/View Configuration */}
-      <div className="card">
-        <h2 style={{ fontSize: 16, marginBottom: 16 }}>多维表格关联</h2>
-        <p className="text-sm text-secondary" style={{ marginBottom: 12 }}>
-          一级标题将作为表格名称，二级标题将作为视图名称。保存时会自动查找或创建对应的表格和视图。
-        </p>
-
-        <div className="form-group">
-          <label className="form-label">多维表格 App Token</label>
-          <div className="flex-row" style={{ gap: 8 }}>
-            <input
-              className="form-input"
-              placeholder="从飞书多维表格 URL 中提取 (base/ 后面的部分)"
-              value={bitableAppToken}
-              onChange={(e) => setBitableAppToken(e.target.value)}
-              style={{ flex: 1 }}
-            />
-          </div>
-          {bitableStatus?.appToken && !bitableAppToken && (
-            <p className="form-hint">
-              系统已配置 App Token: {bitableStatus.appToken}，可留空使用默认值
-            </p>
-          )}
-        </div>
-
-        <div className="flex-row" style={{ gap: 8, marginBottom: 12 }}>
-          <button
-            className="btn btn-outline text-sm"
-            onClick={handleListTables}
-            disabled={loadingTables || !bitableAppToken.trim()}
-          >
-            {loadingTables ? '加载中...' : '📋 浏览已有表格'}
-          </button>
-        </div>
-
-        {availableTables.length > 0 && (
-          <div style={{ marginBottom: 12, padding: 8, background: 'var(--color-bg-light)', borderRadius: 6 }}>
-            <p className="text-sm" style={{ marginBottom: 6, fontWeight: 500 }}>数据库中的表格（点击选中并自动填充一级标题）：</p>
-            {availableTables.map((t: any) => (
-              <div
-                key={t.tableId}
-                className="text-sm"
-                style={{
-                  padding: '6px 10px',
-                  cursor: 'pointer',
-                  borderRadius: 4,
-                  marginBottom: 2,
-                  background: selectedTableId === t.tableId ? 'var(--color-primary-light)' : 'transparent',
-                }}
-                onClick={() => handleSelectTable(t)}
-              >
-                <strong>{t.name}</strong> — <code style={{ fontSize: 11 }}>{t.tableId}</code>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {selectedTableId && (
-          <>
-            <div className="form-group">
-              <label className="form-label">已选表格 ID</label>
-              <input
-                className="form-input"
-                value={selectedTableId}
-                readOnly
-                style={{ background: 'var(--color-bg-light)', fontSize: 13 }}
-              />
-            </div>
-            <div className="flex-row" style={{ gap: 8, marginBottom: 12 }}>
-              <button
-                className="btn btn-outline text-sm"
-                onClick={() => handleListViews(selectedTableId)}
-                disabled={loadingViews}
-              >
-                {loadingViews ? '加载中...' : '📋 浏览该表视图'}
-              </button>
-            </div>
-          </>
-        )}
-
-        {availableViews.length > 0 && (
-          <div style={{ marginBottom: 12, padding: 8, background: 'var(--color-bg-light)', borderRadius: 6 }}>
-            <p className="text-sm" style={{ marginBottom: 6, fontWeight: 500 }}>该表中的视图（点击选中并自动填充二级标题）：</p>
-            {availableViews.map((v: any) => (
-              <div
-                key={v.viewId}
-                className="text-sm"
-                style={{
-                  padding: '6px 10px',
-                  cursor: 'pointer',
-                  borderRadius: 4,
-                  marginBottom: 2,
-                  background: selectedViewId === v.viewId ? 'var(--color-primary-light)' : 'transparent',
-                }}
-                onClick={() => handleSelectView(v)}
-              >
-                <strong>{v.name}</strong> ({v.type}) — <code style={{ fontSize: 11 }}>{v.viewId}</code>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {selectedViewId && (
-          <div className="form-group">
-            <label className="form-label">已选视图 ID</label>
-            <input
-              className="form-input"
-              value={selectedViewId}
-              readOnly
-              style={{ background: 'var(--color-bg-light)', fontSize: 13 }}
-            />
-          </div>
-        )}
-
-        <p className="form-hint" style={{ marginTop: 8 }}>
-          💡 提示：一级标题 = 表格名称，二级标题 = 视图名称。保存填报单时，系统会自动在飞书多维表格中查找或创建对应的表格和视图。
-        </p>
       </div>
 
       {/* Check-in Deadline */}

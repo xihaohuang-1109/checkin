@@ -280,24 +280,7 @@ export async function resolveTableAndView(
     tableId = await createTable(appToken, primaryTitle);
     console.log(`[TableResolve] Created table "${primaryTitle}": ${tableId}`);
 
-    // Add fixed fields
-    const fixedFields = [
-      { field_name: '一级标题', type: 1 },
-      { field_name: '二级标题', type: 1 },
-      { field_name: '签到时间', type: 5 },
-      { field_name: '签到状态', type: 1 },
-      { field_name: '疑似重复', type: 7 },
-    ];
-
-    for (const field of fixedFields) {
-      try {
-        await ensureField(appToken, tableId, field.field_name, field.type);
-      } catch (err) {
-        console.warn(`[TableResolve] Field "${field.field_name}" may already exist:`, err);
-      }
-    }
-
-    // Add dynamic fields from form config
+    // Add dynamic fields from form config first (in order)
     if (fieldsConfig && fieldsConfig.length > 0) {
       for (const field of fieldsConfig) {
         if (field.label) {
@@ -305,7 +288,6 @@ export async function resolveTableAndView(
             const fieldType =
               field.type === 'select' ? 3 :
               field.type === 'tel' ? 13 :
-              field.type === 'email' ? 1 :
               1; // default: text
             await ensureField(appToken, tableId, field.label, fieldType);
             console.log(`[TableResolve] Created dynamic field "${field.label}" (type=${fieldType})`);
@@ -313,6 +295,21 @@ export async function resolveTableAndView(
             console.warn(`[TableResolve] Field "${field.label}" may already exist:`, err);
           }
         }
+      }
+    }
+
+    // Then add system fields: 签到时间, 签到状态, 疑似重复
+    const systemFields = [
+      { field_name: '签到时间', type: 5 },
+      { field_name: '签到状态', type: 1 },
+      { field_name: '疑似重复', type: 7 },
+    ];
+
+    for (const field of systemFields) {
+      try {
+        await ensureField(appToken, tableId, field.field_name, field.type);
+      } catch (err) {
+        console.warn(`[TableResolve] Field "${field.field_name}" may already exist:`, err);
       }
     }
   }

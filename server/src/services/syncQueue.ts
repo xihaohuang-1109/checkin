@@ -55,10 +55,8 @@ export async function syncSubmissionToBitable(submissionId: string): Promise<voi
     // Ensure all required fields exist in the Bitable table
     const existingFields = await getExistingFields(appToken, tableId);
 
-    // Required fixed fields
+    // Required system fields
     const requiredFields: Array<{ name: string; type: number }> = [
-      { name: '一级标题', type: 1 },
-      { name: '二级标题', type: 1 },
       { name: '签到时间', type: 5 },
       { name: '签到状态', type: 1 },
       { name: '疑似重复', type: 7 },
@@ -102,18 +100,16 @@ export async function syncSubmissionToBitable(submissionId: string): Promise<voi
       }
     };
 
-    addIfExists('一级标题', instance.primaryTitle);
-    addIfExists('二级标题', instance.secondaryTitle);
-    addIfExists('签到时间', Math.floor(new Date(submission.submittedAt).getTime()));
-    addIfExists('签到状态', submission.checkinStatus || 'normal');
-    addIfExists('疑似重复', submission.possibleDuplicate);
-
     // Map submitted fields to Bitable column names (using field labels)
     for (const field of fieldsConfig) {
       if (submittedFields[field.key] !== undefined) {
         addIfExists(field.label, submittedFields[field.key]);
       }
     }
+
+    addIfExists('签到时间', Math.floor(new Date(submission.submittedAt).getTime()));
+    addIfExists('签到状态', submission.checkinStatus || 'normal');
+    addIfExists('疑似重复', submission.possibleDuplicate);
 
     // Ensure the view exists for this 二级标题
     try {
