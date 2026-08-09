@@ -46,7 +46,6 @@ model FormInstance {
   checkinDeadline     DateTime?    // if set, submissions after this time are marked "late"
   bitableAppToken     String?
   bitableRecordsTableId String?
-  bitableQrcodesTableId String?
   bitableViewId       String?
   createdByAdminId    String?
   createdByAdmin      AdminUser?   @relation(fields: [createdByAdminId], references: [id])

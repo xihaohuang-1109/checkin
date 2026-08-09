@@ -1,12 +1,12 @@
 import { getDb } from '../db/client';
 import { getEnv } from '../config/env';
-import { uploadMediaToBitable, createBitableRecord } from './feishu/drive';
 import QRCode from 'qrcode';
 import { nanoid } from 'nanoid';
 
 /**
- * Generate a new QR code for a form instance, upload it to Bitable, and archive.
+ * Generate a new QR code for a form instance.
  * This ROTATES the QR (same instance, new token) — does NOT reset dedup records.
+ * QR is only stored locally; no Bitable archival.
  */
 export async function generateQrAndArchive(
   instance: any,
@@ -16,7 +16,6 @@ export async function generateQrAndArchive(
   qrExpiresAt: string;
   qrUrl: string;
   pngBase64: string;
-  bitableRecordId?: string;
 }> {
   const db = getDb();
   const env = getEnv();
@@ -48,57 +47,10 @@ export async function generateQrAndArchive(
     },
   });
 
-  // Try to archive to Bitable (non-blocking — if Bitable isn't set up yet, we still succeed locally)
-  let bitableRecordId: string | undefined;
-  try {
-    const appTokenConfig = await db.appConfig.findUnique({
-      where: { key: 'bitable_app_token' },
-    });
-    const qrcodesTableConfig = await db.appConfig.findUnique({
-      where: { key: 'bitable_qrcodes_table_id' },
-    });
-
-    if (appTokenConfig && qrcodesTableConfig) {
-      const appToken = appTokenConfig.value;
-      const tableId = qrcodesTableConfig.value;
-
-      // Upload QR PNG to Feishu Drive
-      const fileToken = await uploadMediaToBitable(
-        appToken,
-        tableId,
-        pngBuffer,
-        `qr-${instance.id}-${Date.now()}.png`
-      );
-
-      // Create record in 签到码 table
-      const recordFields: Record<string, any> = {
-        '一级标题': instance.primaryTitle,
-        '二级标题': instance.secondaryTitle,
-        '生成时间': Math.floor(Date.now()),
-        '有效期至': Math.floor(qrExpiresAt.getTime()),
-        '二维码': [{ file_token: fileToken }],
-        '表单链接': {
-          link: qrUrl,
-          text: '打开签到表单',
-        },
-        '状态': '有效',
-      };
-
-      bitableRecordId = await createBitableRecord(appToken, tableId, recordFields);
-      console.log(`[QR] QR archived to Bitable: ${bitableRecordId}`);
-    } else {
-      console.warn('[QR] Bitable not bootstrapped, QR not archived to cloud');
-    }
-  } catch (err: any) {
-    console.error('[QR] Failed to archive QR to Bitable:', err.message);
-    // Non-fatal — local QR is still valid
-  }
-
   return {
     qrToken,
     qrExpiresAt: qrExpiresAt.toISOString(),
     qrUrl,
     pngBase64,
-    bitableRecordId,
   };
 }

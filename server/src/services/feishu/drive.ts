@@ -78,11 +78,10 @@ export async function getRootFolderToken(userAccessToken: string): Promise<strin
  * drive:drive user authorization. The Bitable is created in the app's space
  * rather than the admin's personal "我的空间", but is fully functional.
  * Called once (idempotent) via admin API.
+ * Only creates the Bitable app — tables are created per-form-instance.
  */
 export async function bootstrapBitable(_userAccessToken?: string): Promise<{
   appToken: string;
-  recordsTableId: string;
-  qrcodesTableId: string;
 }> {
   const token = await getTenantAccessToken();
 
@@ -106,171 +105,7 @@ export async function bootstrapBitable(_userAccessToken?: string): Promise<{
   const appToken = createRes.data.app.app_token;
   console.log(`[Bootstrap] Bitable created: ${appToken}`);
 
-  // 2. Create "签到记录" table
-  const recordsTableId = await createRecordsTable(appToken, token);
-  console.log(`[Bootstrap] Records table: ${recordsTableId}`);
-
-  // 3. Create "签到码" table
-  const qrcodesTableId = await createQrcodesTable(appToken, token);
-  console.log(`[Bootstrap] QR codes table: ${qrcodesTableId}`);
-
-  return { appToken, recordsTableId, qrcodesTableId };
-}
-
-/**
- * Create the "签到记录" (check-in records) table with fixed fields.
- */
-async function createRecordsTable(appToken: string, token: string): Promise<string> {
-  // Check if table exists
-  const tablesRes = await feishuRequest<TablesResponse>(
-    `/bitable/v1/apps/${appToken}/tables`,
-    { token }
-  );
-
-  const existing = tablesRes.data?.items?.find((t) => t.name === '签到记录');
-  if (existing) return existing.table_id;
-
-  const createRes = await feishuRequest<CreateTableResponse>(
-    `/bitable/v1/apps/${appToken}/tables`,
-    {
-      method: 'POST',
-      token,
-      body: {
-        table: {
-          name: '签到记录',
-        },
-      },
-    }
-  );
-
-  if (createRes.code !== 0) {
-    throw new Error(`Failed to create records table: ${createRes.msg}`);
-  }
-
-  const tableId = createRes.data.table_id;
-
-  // Add fixed fields to the table
-  const fixedFields = [
-    { field_name: '一级标题', type: 1 },   // 1 = text
-    { field_name: '二级标题', type: 1 },   // 1 = text
-    { field_name: '提交时间', type: 5 },   // 5 = datetime
-    { field_name: '疑似重复', type: 7 },   // 7 = checkbox
-  ];
-
-  for (const field of fixedFields) {
-    try {
-      await feishuRequest<CreateFieldResponse>(
-        `/bitable/v1/apps/${appToken}/tables/${tableId}/fields`,
-        {
-          method: 'POST',
-          token,
-          body: { field_name: field.field_name, type: field.type },
-        }
-      );
-    } catch (err) {
-      console.warn(`[Bootstrap] Field "${field.field_name}" may already exist:`, err);
-    }
-  }
-
-  return tableId;
-}
-
-/**
- * Create the "签到码" (QR codes) table with fixed fields.
- */
-async function createQrcodesTable(appToken: string, token: string): Promise<string> {
-  const tablesRes = await feishuRequest<TablesResponse>(
-    `/bitable/v1/apps/${appToken}/tables`,
-    { token }
-  );
-
-  const existing = tablesRes.data?.items?.find((t) => t.name === '签到码');
-  if (existing) return existing.table_id;
-
-  const createRes = await feishuRequest<CreateTableResponse>(
-    `/bitable/v1/apps/${appToken}/tables`,
-    {
-      method: 'POST',
-      token,
-      body: {
-        table: {
-          name: '签到码',
-        },
-      },
-    }
-  );
-
-  if (createRes.code !== 0) {
-    throw new Error(`Failed to create QR codes table: ${createRes.msg}`);
-  }
-
-  const tableId = createRes.data.table_id;
-
-  const fixedFields = [
-    { field_name: '一级标题', type: 1 },
-    { field_name: '二级标题', type: 1 },
-    { field_name: '生成时间', type: 5 },
-    { field_name: '有效期至', type: 5 },
-    { field_name: '二维码', type: 17 },    // 17 = attachment
-    { field_name: '表单链接', type: 15 },  // 15 = URL
-    { field_name: '状态', type: 3 },       // 3 = single select
-  ];
-
-  for (const field of fixedFields) {
-    try {
-      await feishuRequest<CreateFieldResponse>(
-        `/bitable/v1/apps/${appToken}/tables/${tableId}/fields`,
-        {
-          method: 'POST',
-          token,
-          body: { field_name: field.field_name, type: field.type },
-        }
-      );
-    } catch (err) {
-      console.warn(`[Bootstrap] Field "${field.field_name}" may already exist:`, err);
-    }
-  }
-
-  return tableId;
-}
-
-/**
- * Upload media (QR code PNG) to Feishu Drive for use in Bitable attachment field.
- * Returns the file_token.
- */
-export async function uploadMediaToBitable(
-  appToken: string,
-  tableId: string,
-  pngBuffer: Buffer,
-  filename: string
-): Promise<string> {
-  const token = await getTenantAccessToken();
-
-  const formData = new FormData();
-  const blob = new Blob([new Uint8Array(pngBuffer)], { type: 'image/png' });
-  formData.append('file', blob, filename);
-  formData.append('file_name', filename);
-  formData.append('parent_type', 'bitable_file');
-  formData.append('parent_node', appToken);
-  formData.append('size', String(pngBuffer.length));
-
-  const res = await fetch(
-    'https://open.feishu.cn/open-apis/drive/v1/medias/upload_all',
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      body: formData,
-    }
-  );
-
-  const data = await res.json();
-  if (data.code !== 0) {
-    throw new Error(`Media upload failed: ${data.msg}`);
-  }
-
-  return data.data.file_token;
+  return { appToken };
 }
 
 /**
@@ -324,25 +159,34 @@ export async function ensureView(
   if (existing) return existing.view_id;
 
   // Create new view
+  return createView(appToken, tableId, primaryTitle, token);
+}
+
+async function createView(
+  appToken: string,
+  tableId: string,
+  viewName: string,
+  token: string
+): Promise<string> {
   const createRes = await feishuRequest<CreateViewResponse>(
     `/bitable/v1/apps/${appToken}/tables/${tableId}/views`,
     {
       method: 'POST',
       token,
       body: {
-        view_name: primaryTitle,
+        view_name: viewName,
         view_type: 'grid',
       },
     }
   );
 
   if (createRes.code !== 0) {
-    throw new Error(`Failed to create view "${primaryTitle}": ${createRes.msg}`);
+    throw new Error(`Failed to create view "${viewName}": ${createRes.msg}`);
   }
 
   const viewId = createRes.data.view.view_id;
 
-  // Set filter: 一级标题 == primaryTitle
+  // Set filter: 一级标题 == viewName
   await feishuRequest<any>(
     `/bitable/v1/apps/${appToken}/tables/${tableId}/views/${viewId}`,
     {
@@ -355,7 +199,7 @@ export async function ensureView(
             {
               field_name: '一级标题',
               operator: 'is',
-              value: [primaryTitle],
+              value: [viewName],
             },
           ],
         },
@@ -369,6 +213,130 @@ export async function ensureView(
   );
 
   return viewId;
+}
+
+/**
+ * Create a new table in the Bitable app.
+ * Returns the table_id.
+ */
+export async function createTable(
+  appToken: string,
+  tableName: string
+): Promise<string> {
+  const token = await getTenantAccessToken();
+
+  const createRes = await feishuRequest<CreateTableResponse>(
+    `/bitable/v1/apps/${appToken}/tables`,
+    {
+      method: 'POST',
+      token,
+      body: {
+        table: {
+          name: tableName,
+        },
+      },
+    }
+  );
+
+  if (createRes.code !== 0) {
+    throw new Error(`Failed to create table "${tableName}": ${createRes.msg}`);
+  }
+
+  return createRes.data.table_id;
+}
+
+/**
+ * Resolve or create a table and view for a form instance.
+ *
+ * 一级标题 → table name: find existing table by name, or create a new one.
+ * 二级标题 → view name: find existing view within that table, or create a new one.
+ * When creating a new table, adds fixed fields + dynamic fields from fieldsConfig.
+ *
+ * Returns { tableId, viewId } for storage on the FormInstance.
+ */
+export async function resolveTableAndView(
+  appToken: string,
+  primaryTitle: string,
+  secondaryTitle: string,
+  fieldsConfig?: Array<{ label: string; type: string }>
+): Promise<{ tableId: string; viewId: string }> {
+  const token = await getTenantAccessToken();
+
+  // 1. List tables, find by name (一级标题)
+  const tablesRes = await feishuRequest<TablesResponse>(
+    `/bitable/v1/apps/${appToken}/tables`,
+    { token }
+  );
+
+  let tableId: string;
+  const existingTable = tablesRes.data?.items?.find(
+    (t) => t.name === primaryTitle
+  );
+
+  if (existingTable) {
+    tableId = existingTable.table_id;
+    console.log(`[TableResolve] Found existing table "${primaryTitle}": ${tableId}`);
+  } else {
+    tableId = await createTable(appToken, primaryTitle);
+    console.log(`[TableResolve] Created table "${primaryTitle}": ${tableId}`);
+
+    // Add fixed fields
+    const fixedFields = [
+      { field_name: '一级标题', type: 1 },
+      { field_name: '二级标题', type: 1 },
+      { field_name: '签到时间', type: 5 },
+      { field_name: '签到状态', type: 1 },
+      { field_name: '疑似重复', type: 7 },
+    ];
+
+    for (const field of fixedFields) {
+      try {
+        await ensureField(appToken, tableId, field.field_name, field.type);
+      } catch (err) {
+        console.warn(`[TableResolve] Field "${field.field_name}" may already exist:`, err);
+      }
+    }
+
+    // Add dynamic fields from form config
+    if (fieldsConfig && fieldsConfig.length > 0) {
+      for (const field of fieldsConfig) {
+        if (field.label) {
+          try {
+            const fieldType =
+              field.type === 'select' ? 3 :
+              field.type === 'tel' ? 13 :
+              field.type === 'email' ? 1 :
+              1; // default: text
+            await ensureField(appToken, tableId, field.label, fieldType);
+            console.log(`[TableResolve] Created dynamic field "${field.label}" (type=${fieldType})`);
+          } catch (err) {
+            console.warn(`[TableResolve] Field "${field.label}" may already exist:`, err);
+          }
+        }
+      }
+    }
+  }
+
+  // 2. List views, find by name (二级标题)
+  const viewsRes = await feishuRequest<any>(
+    `/bitable/v1/apps/${appToken}/tables/${tableId}/views`,
+    { token }
+  );
+
+  let viewId: string;
+  const existingView = viewsRes.data?.items?.find(
+    (v: any) => v.view_name === secondaryTitle
+  );
+
+  if (existingView) {
+    viewId = existingView.view_id;
+    console.log(`[ViewResolve] Found existing view "${secondaryTitle}": ${viewId}`);
+  } else {
+    viewId = await createView(appToken, tableId, secondaryTitle, token);
+    console.log(`[ViewResolve] Created view "${secondaryTitle}": ${viewId}`);
+  }
+
+  return { tableId, viewId };
 }
 
 /**

@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { getDb } from '../db/client';
 import { requireAdminSession, requireSuperAdmin } from '../middleware/requireAdminSession';
 import { generateQrAndArchive } from '../services/qrService';
+import { resolveTableAndView } from '../services/feishu/drive';
 import QRCode from 'qrcode';
 
 const router = Router();
@@ -76,7 +77,6 @@ router.get('/form-instances/:id', async (req: Request, res: Response) => {
       checkinDeadline: instance.checkinDeadline?.toISOString() || null,
       bitableAppToken: instance.bitableAppToken,
       bitableRecordsTableId: instance.bitableRecordsTableId,
-      bitableQrcodesTableId: instance.bitableQrcodesTableId,
       bitableViewId: instance.bitableViewId,
       createdAt: instance.createdAt.toISOString(),
       updatedAt: instance.updatedAt.toISOString(),
@@ -91,7 +91,7 @@ router.get('/form-instances/:id', async (req: Request, res: Response) => {
  */
 router.post('/form-instances', async (req: Request, res: Response) => {
   const db = getDb();
-  const { primaryTitle, secondaryTitle, fieldsConfig, geofenceLat, geofenceLng, geofenceRadiusM, checkinDeadline } = req.body;
+  const { primaryTitle, secondaryTitle, fieldsConfig, geofenceLat, geofenceLng, geofenceRadiusM, checkinDeadline, bitableAppToken } = req.body;
 
   if (!primaryTitle || !secondaryTitle) {
     res.status(400).json({ error: 'primaryTitle and secondaryTitle are required' });
@@ -99,6 +99,21 @@ router.post('/form-instances', async (req: Request, res: Response) => {
   }
 
   const adminUserId = req.session.adminUserId!;
+
+  let bitableRecordsTableId: string | null = null;
+  let bitableViewId: string | null = null;
+
+  // If bitableAppToken is provided, auto-resolve table & view from titles
+  if (bitableAppToken) {
+    try {
+      const resolved = await resolveTableAndView(bitableAppToken, primaryTitle, secondaryTitle, fieldsConfig);
+      bitableRecordsTableId = resolved.tableId;
+      bitableViewId = resolved.viewId;
+    } catch (err: any) {
+      console.warn('[FormInstance] Failed to resolve table/view:', err.message);
+      // Non-fatal — save the instance anyway, admin can retry later
+    }
+  }
 
   const instance = await db.formInstance.create({
     data: {
@@ -109,6 +124,9 @@ router.post('/form-instances', async (req: Request, res: Response) => {
       geofenceLng: geofenceLng || null,
       geofenceRadiusM: geofenceRadiusM || null,
       checkinDeadline: checkinDeadline ? new Date(checkinDeadline) : null,
+      bitableAppToken: bitableAppToken || null,
+      bitableRecordsTableId,
+      bitableViewId,
       createdByAdminId: adminUserId,
     },
   });
@@ -124,6 +142,9 @@ router.post('/form-instances', async (req: Request, res: Response) => {
       geofenceRadiusM: instance.geofenceRadiusM,
       qrExpiresAt: null,
       checkinDeadline: instance.checkinDeadline?.toISOString() || null,
+      bitableAppToken: instance.bitableAppToken,
+      bitableRecordsTableId: instance.bitableRecordsTableId,
+      bitableViewId: instance.bitableViewId,
       createdAt: instance.createdAt.toISOString(),
       updatedAt: instance.updatedAt.toISOString(),
     },
@@ -137,7 +158,7 @@ router.post('/form-instances', async (req: Request, res: Response) => {
 router.put('/form-instances/:id', async (req: Request, res: Response) => {
   const db = getDb();
   const id = req.params.id as string;
-  const { primaryTitle, secondaryTitle, fieldsConfig, geofenceLat, geofenceLng, geofenceRadiusM, checkinDeadline } = req.body;
+  const { primaryTitle, secondaryTitle, fieldsConfig, geofenceLat, geofenceLng, geofenceRadiusM, checkinDeadline, bitableAppToken } = req.body;
 
   const existing = await db.formInstance.findUnique({ where: { id } });
   if (!existing) {
@@ -154,6 +175,23 @@ router.put('/form-instances/:id', async (req: Request, res: Response) => {
   if (geofenceRadiusM !== undefined) updateData.geofenceRadiusM = geofenceRadiusM;
   if (checkinDeadline !== undefined) {
     updateData.checkinDeadline = checkinDeadline ? new Date(checkinDeadline) : null;
+  }
+  if (bitableAppToken !== undefined) updateData.bitableAppToken = bitableAppToken || null;
+
+  // If bitableAppToken is provided and titles changed, re-resolve table & view
+  const effectiveAppToken = bitableAppToken !== undefined ? (bitableAppToken || null) : existing.bitableAppToken;
+  const effectivePrimary = primaryTitle !== undefined ? primaryTitle : existing.primaryTitle;
+  const effectiveSecondary = secondaryTitle !== undefined ? secondaryTitle : existing.secondaryTitle;
+
+  if (effectiveAppToken && (primaryTitle !== undefined || secondaryTitle !== undefined)) {
+    try {
+      const effectiveFieldsConfig = fieldsConfig !== undefined ? fieldsConfig : JSON.parse(existing.fieldsConfig);
+      const resolved = await resolveTableAndView(effectiveAppToken, effectivePrimary, effectiveSecondary, effectiveFieldsConfig);
+      updateData.bitableRecordsTableId = resolved.tableId;
+      updateData.bitableViewId = resolved.viewId;
+    } catch (err: any) {
+      console.warn('[FormInstance] Failed to resolve table/view on update:', err.message);
+    }
   }
 
   const instance = await db.formInstance.update({
@@ -174,6 +212,9 @@ router.put('/form-instances/:id', async (req: Request, res: Response) => {
       qrExpiresAt: instance.qrExpiresAt?.toISOString() || null,
       qrStatus: instance.qrStatus,
       checkinDeadline: instance.checkinDeadline?.toISOString() || null,
+      bitableAppToken: instance.bitableAppToken,
+      bitableRecordsTableId: instance.bitableRecordsTableId,
+      bitableViewId: instance.bitableViewId,
       createdAt: instance.createdAt.toISOString(),
       updatedAt: instance.updatedAt.toISOString(),
     },
@@ -375,16 +416,6 @@ router.post('/bootstrap-bitable', async (req: Request, res: Response) => {
       update: { value: result.appToken },
       create: { key: 'bitable_app_token', value: result.appToken },
     });
-    await db.appConfig.upsert({
-      where: { key: 'bitable_records_table_id' },
-      update: { value: result.recordsTableId },
-      create: { key: 'bitable_records_table_id', value: result.recordsTableId },
-    });
-    await db.appConfig.upsert({
-      where: { key: 'bitable_qrcodes_table_id' },
-      update: { value: result.qrcodesTableId },
-      create: { key: 'bitable_qrcodes_table_id', value: result.qrcodesTableId },
-    });
 
     res.json(result);
   } catch (err: any) {
@@ -400,31 +431,24 @@ router.post('/bootstrap-bitable', async (req: Request, res: Response) => {
 router.get('/bitable-status', async (_req: Request, res: Response) => {
   const db = getDb();
   const appToken = await db.appConfig.findUnique({ where: { key: 'bitable_app_token' } });
-  const recordsTableId = await db.appConfig.findUnique({ where: { key: 'bitable_records_table_id' } });
-  const qrcodesTableId = await db.appConfig.findUnique({ where: { key: 'bitable_qrcodes_table_id' } });
-  const recordsViewId = await db.appConfig.findUnique({ where: { key: 'bitable_records_view_id' } });
-  const qrcodesViewId = await db.appConfig.findUnique({ where: { key: 'bitable_qrcodes_view_id' } });
 
   res.json({
     bootstrapped: !!appToken,
     appToken: appToken?.value || null,
-    recordsTableId: recordsTableId?.value || null,
-    qrcodesTableId: qrcodesTableId?.value || null,
-    recordsViewId: recordsViewId?.value || null,
-    qrcodesViewId: qrcodesViewId?.value || null,
   });
 });
 
 /**
  * POST /api/admin/set-bitable-config
- * Configure or update an existing Bitable connection (supports re-configuration).
+ * Configure or update the Bitable App Token.
+ * Table and view are now per-form-instance, resolved from 一级标题/二级标题.
  */
 router.post('/set-bitable-config', async (req: Request, res: Response) => {
   const db = getDb();
-  const { appToken, recordsTableId, qrcodesTableId, recordsViewId, qrcodesViewId } = req.body;
+  const { appToken } = req.body;
 
-  if (!appToken || !recordsTableId) {
-    res.status(400).json({ error: 'appToken and recordsTableId are required' });
+  if (!appToken) {
+    res.status(400).json({ error: 'appToken is required' });
     return;
   }
 
@@ -433,34 +457,8 @@ router.post('/set-bitable-config', async (req: Request, res: Response) => {
     update: { value: appToken },
     create: { key: 'bitable_app_token', value: appToken },
   });
-  await db.appConfig.upsert({
-    where: { key: 'bitable_records_table_id' },
-    update: { value: recordsTableId },
-    create: { key: 'bitable_records_table_id', value: recordsTableId },
-  });
-  if (qrcodesTableId) {
-    await db.appConfig.upsert({
-      where: { key: 'bitable_qrcodes_table_id' },
-      update: { value: qrcodesTableId },
-      create: { key: 'bitable_qrcodes_table_id', value: qrcodesTableId },
-    });
-  }
-  if (recordsViewId) {
-    await db.appConfig.upsert({
-      where: { key: 'bitable_records_view_id' },
-      update: { value: recordsViewId },
-      create: { key: 'bitable_records_view_id', value: recordsViewId },
-    });
-  }
-  if (qrcodesViewId) {
-    await db.appConfig.upsert({
-      where: { key: 'bitable_qrcodes_view_id' },
-      update: { value: qrcodesViewId },
-      create: { key: 'bitable_qrcodes_view_id', value: qrcodesViewId },
-    });
-  }
 
-  res.json({ success: true, appToken, recordsTableId, qrcodesTableId: qrcodesTableId || null, recordsViewId: recordsViewId || null, qrcodesViewId: qrcodesViewId || null });
+  res.json({ success: true, appToken });
 });
 
 /**

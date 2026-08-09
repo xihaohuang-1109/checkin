@@ -37,23 +37,17 @@ export async function syncSubmissionToBitable(submissionId: string): Promise<voi
     return;
   }
 
-  // Get bitable config
-  const appTokenConfig = await db.appConfig.findUnique({
-    where: { key: 'bitable_app_token' },
-  });
-  const recordsTableConfig = await db.appConfig.findUnique({
-    where: { key: 'bitable_records_table_id' },
-  });
+  const instance = submission.formInstance;
 
-  if (!appTokenConfig || !recordsTableConfig) {
-    // Bitable not bootstrapped yet; mark as pending, will retry later
-    console.warn('[SyncQueue] Bitable not bootstrapped, submission will sync later');
+  // Get bitable config from the form instance (per-instance)
+  const appToken = instance.bitableAppToken;
+  const tableId = instance.bitableRecordsTableId;
+
+  if (!appToken || !tableId) {
+    // Bitable not configured for this instance; mark as pending, will retry later
+    console.warn(`[SyncQueue] No Bitable config for instance ${instance.id}, submission will sync later`);
     return;
   }
-
-  const appToken = appTokenConfig.value;
-  const tableId = recordsTableConfig.value;
-  const instance = submission.formInstance;
   const submittedFields = JSON.parse(submission.submittedFields || '{}');
   const fieldsConfig: FieldConfig[] = JSON.parse(instance.fieldsConfig || '[]');
 
@@ -121,9 +115,13 @@ export async function syncSubmissionToBitable(submissionId: string): Promise<voi
       }
     }
 
-    // Ensure the view exists for this 一级标题
+    // Ensure the view exists for this 二级标题
     try {
-      await ensureView(appToken, tableId, instance.primaryTitle);
+      const viewId = instance.bitableViewId;
+      if (viewId) {
+        // View already resolved — just ensure it still exists
+        await ensureView(appToken, tableId, instance.secondaryTitle);
+      }
     } catch (viewErr: any) {
       console.warn(`[SyncQueue] View ensure failed (non-fatal): ${viewErr.message}`);
     }

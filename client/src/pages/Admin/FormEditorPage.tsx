@@ -47,6 +47,16 @@ export function AdminFormEditorPage() {
   const [generatingQr, setGeneratingQr] = useState(false);
   const [qrError, setQrError] = useState<string | null>(null);
 
+  // Bitable per-instance config
+  const [bitableAppToken, setBitableAppToken] = useState('');
+  const [availableTables, setAvailableTables] = useState<any[]>([]);
+  const [availableViews, setAvailableViews] = useState<any[]>([]);
+  const [loadingTables, setLoadingTables] = useState(false);
+  const [loadingViews, setLoadingViews] = useState(false);
+  const [selectedTableId, setSelectedTableId] = useState('');
+  const [selectedViewId, setSelectedViewId] = useState('');
+  const [bitableStatus, setBitableStatus] = useState<any>(null);
+
   // Check auth
   useEffect(() => {
     api.getMe()
@@ -56,6 +66,19 @@ export function AdminFormEditorPage() {
       })
       .catch(() => setAuthChecked(true));
   }, []);
+
+  // Fetch Bitable status (for the App Token)
+  useEffect(() => {
+    if (!admin) return;
+    api.getBitableStatus()
+      .then((data) => {
+        setBitableStatus(data);
+        if (data.appToken) {
+          setBitableAppToken(data.appToken);
+        }
+      })
+      .catch(() => {});
+  }, [admin]);
 
   // Load existing instance
   useEffect(() => {
@@ -83,6 +106,16 @@ export function AdminFormEditorPage() {
             qrExpiresAt: inst.qrExpiresAt,
             qrUrl: `${window.location.origin}/f/${inst.id}?t=${inst.qrToken}`,
           });
+        }
+        // Pre-fill Bitable config
+        if (inst.bitableAppToken) {
+          setBitableAppToken(inst.bitableAppToken);
+        }
+        if (inst.bitableRecordsTableId) {
+          setSelectedTableId(inst.bitableRecordsTableId);
+        }
+        if (inst.bitableViewId) {
+          setSelectedViewId(inst.bitableViewId);
         }
       } catch (err) {
         console.error('Failed to load instance:', err);
@@ -187,6 +220,7 @@ export function AdminFormEditorPage() {
         geofenceLng: useGeofence ? geofenceLng : null,
         geofenceRadiusM: useGeofence ? geofenceRadiusM : null,
         checkinDeadline: useDeadline && checkinDeadline ? new Date(checkinDeadline).toISOString() : null,
+        bitableAppToken: bitableAppToken.trim() || null,
       };
 
       if (isEditing) {
@@ -202,6 +236,48 @@ export function AdminFormEditorPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  // ============ Bitable Table/View Browsing ============
+
+  const handleListTables = async () => {
+    if (!bitableAppToken.trim()) {
+      alert('请先设置多维表格 App Token');
+      return;
+    }
+    setLoadingTables(true);
+    try {
+      const data = await api.listBitableTables(bitableAppToken.trim());
+      setAvailableTables(data.tables);
+    } catch (err: any) {
+      alert(`获取表格列表失败: ${err.message}`);
+    } finally {
+      setLoadingTables(false);
+    }
+  };
+
+  const handleListViews = async (tableId: string) => {
+    if (!tableId || !bitableAppToken.trim()) return;
+    setLoadingViews(true);
+    try {
+      const data = await api.listBitableViews(bitableAppToken.trim(), tableId);
+      setAvailableViews(data.views);
+    } catch (err: any) {
+      alert(`获取视图列表失败: ${err.message}`);
+    } finally {
+      setLoadingViews(false);
+    }
+  };
+
+  const handleSelectTable = (t: any) => {
+    setSelectedTableId(t.tableId);
+    setPrimaryTitle(t.name);
+    handleListViews(t.tableId);
+  };
+
+  const handleSelectView = (v: any) => {
+    setSelectedViewId(v.viewId);
+    setSecondaryTitle(v.name);
   };
 
   // ============ QR Generation ============
@@ -452,6 +528,125 @@ export function AdminFormEditorPage() {
             </div>
           </>
         )}
+      </div>
+
+      {/* Bitable Table/View Configuration */}
+      <div className="card">
+        <h2 style={{ fontSize: 16, marginBottom: 16 }}>多维表格关联</h2>
+        <p className="text-sm text-secondary" style={{ marginBottom: 12 }}>
+          一级标题将作为表格名称，二级标题将作为视图名称。保存时会自动查找或创建对应的表格和视图。
+        </p>
+
+        <div className="form-group">
+          <label className="form-label">多维表格 App Token</label>
+          <div className="flex-row" style={{ gap: 8 }}>
+            <input
+              className="form-input"
+              placeholder="从飞书多维表格 URL 中提取 (base/ 后面的部分)"
+              value={bitableAppToken}
+              onChange={(e) => setBitableAppToken(e.target.value)}
+              style={{ flex: 1 }}
+            />
+          </div>
+          {bitableStatus?.appToken && !bitableAppToken && (
+            <p className="form-hint">
+              系统已配置 App Token: {bitableStatus.appToken}，可留空使用默认值
+            </p>
+          )}
+        </div>
+
+        <div className="flex-row" style={{ gap: 8, marginBottom: 12 }}>
+          <button
+            className="btn btn-outline text-sm"
+            onClick={handleListTables}
+            disabled={loadingTables || !bitableAppToken.trim()}
+          >
+            {loadingTables ? '加载中...' : '📋 浏览已有表格'}
+          </button>
+        </div>
+
+        {availableTables.length > 0 && (
+          <div style={{ marginBottom: 12, padding: 8, background: 'var(--color-bg-light)', borderRadius: 6 }}>
+            <p className="text-sm" style={{ marginBottom: 6, fontWeight: 500 }}>数据库中的表格（点击选中并自动填充一级标题）：</p>
+            {availableTables.map((t: any) => (
+              <div
+                key={t.tableId}
+                className="text-sm"
+                style={{
+                  padding: '6px 10px',
+                  cursor: 'pointer',
+                  borderRadius: 4,
+                  marginBottom: 2,
+                  background: selectedTableId === t.tableId ? 'var(--color-primary-light)' : 'transparent',
+                }}
+                onClick={() => handleSelectTable(t)}
+              >
+                <strong>{t.name}</strong> — <code style={{ fontSize: 11 }}>{t.tableId}</code>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {selectedTableId && (
+          <>
+            <div className="form-group">
+              <label className="form-label">已选表格 ID</label>
+              <input
+                className="form-input"
+                value={selectedTableId}
+                readOnly
+                style={{ background: 'var(--color-bg-light)', fontSize: 13 }}
+              />
+            </div>
+            <div className="flex-row" style={{ gap: 8, marginBottom: 12 }}>
+              <button
+                className="btn btn-outline text-sm"
+                onClick={() => handleListViews(selectedTableId)}
+                disabled={loadingViews}
+              >
+                {loadingViews ? '加载中...' : '📋 浏览该表视图'}
+              </button>
+            </div>
+          </>
+        )}
+
+        {availableViews.length > 0 && (
+          <div style={{ marginBottom: 12, padding: 8, background: 'var(--color-bg-light)', borderRadius: 6 }}>
+            <p className="text-sm" style={{ marginBottom: 6, fontWeight: 500 }}>该表中的视图（点击选中并自动填充二级标题）：</p>
+            {availableViews.map((v: any) => (
+              <div
+                key={v.viewId}
+                className="text-sm"
+                style={{
+                  padding: '6px 10px',
+                  cursor: 'pointer',
+                  borderRadius: 4,
+                  marginBottom: 2,
+                  background: selectedViewId === v.viewId ? 'var(--color-primary-light)' : 'transparent',
+                }}
+                onClick={() => handleSelectView(v)}
+              >
+                <strong>{v.name}</strong> ({v.type}) — <code style={{ fontSize: 11 }}>{v.viewId}</code>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {selectedViewId && (
+          <div className="form-group">
+            <label className="form-label">已选视图 ID</label>
+            <input
+              className="form-input"
+              value={selectedViewId}
+              readOnly
+              style={{ background: 'var(--color-bg-light)', fontSize: 13 }}
+            />
+          </div>
+        )}
+
+        <p className="form-hint" style={{ marginTop: 8 }}>
+          💡 提示：一级标题 = 表格名称，二级标题 = 视图名称。保存填报单时，系统会自动在飞书多维表格中查找或创建对应的表格和视图。
+        </p>
       </div>
 
       {/* Check-in Deadline */}

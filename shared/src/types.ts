@@ -24,6 +24,9 @@ export interface FormInstanceDTO {
   qrExpiresAt: string | null;
   qrStatus: 'active' | 'expired' | null;
   checkinDeadline: string | null;
+  bitableAppToken: string | null;
+  bitableRecordsTableId: string | null;
+  bitableViewId: string | null;
   createdAt: string;
   updatedAt: string;
 }
