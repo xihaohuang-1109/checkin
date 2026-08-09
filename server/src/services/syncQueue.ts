@@ -1,7 +1,24 @@
 import { getDb } from '../db/client';
 import { createBitableRecord, ensureView, ensureField } from './feishu/drive';
 import { getTenantAccessToken } from './feishu/tokenManager';
+import { feishuRequest } from './feishu/httpClient';
 import type { FieldConfig } from '../types/field';
+
+/**
+ * Fetch existing field names from a Bitable table.
+ */
+async function getExistingFields(appToken: string, tableId: string): Promise<Set<string>> {
+  const token = await getTenantAccessToken();
+  const res = await feishuRequest<any>(
+    `/bitable/v1/apps/${appToken}/tables/${tableId}/fields`,
+    { token }
+  );
+  const names = new Set<string>();
+  for (const item of (res.data?.items || [])) {
+    names.add(item.field_name);
+  }
+  return names;
+}
 
 /**
  * Sync a single submission to Feishu Bitable.
@@ -41,36 +58,72 @@ export async function syncSubmissionToBitable(submissionId: string): Promise<voi
   const fieldsConfig: FieldConfig[] = JSON.parse(instance.fieldsConfig || '[]');
 
   try {
-    // Ensure the view exists for this 一级标题 (non-fatal: table may already have views)
-    try {
-      await ensureView(appToken, tableId, instance.primaryTitle);
-    } catch (viewErr: any) {
-      console.warn(`[SyncQueue] View ensure failed (non-fatal): ${viewErr.message}`);
-    }
+    // Ensure all required fields exist in the Bitable table
+    const existingFields = await getExistingFields(appToken, tableId);
 
-    // Ensure all dynamic fields exist in the Bitable table (non-fatal)
-    for (const field of fieldsConfig) {
-      try {
-        const fieldType = field.type === 'select' ? 3 : field.type === 'tel' ? 13 : 1;
-        await ensureField(appToken, tableId, field.label, fieldType);
-      } catch (fieldErr: any) {
-        console.warn(`[SyncQueue] Field ensure "${field.label}" failed (non-fatal): ${fieldErr.message}`);
+    // Required fixed fields
+    const requiredFields: Array<{ name: string; type: number }> = [
+      { name: '一级标题', type: 1 },
+      { name: '二级标题', type: 1 },
+      { name: '提交时间', type: 5 },
+      { name: '疑似重复', type: 7 },
+    ];
+
+    for (const f of requiredFields) {
+      if (!existingFields.has(f.name)) {
+        try {
+          await ensureField(appToken, tableId, f.name, f.type);
+          console.log(`[SyncQueue] Created field "${f.name}" in table ${tableId}`);
+        } catch (fieldErr: any) {
+          console.warn(`[SyncQueue] Failed to create field "${f.name}": ${fieldErr.message}`);
+        }
       }
     }
 
-    // Build record fields
-    const recordFields: Record<string, any> = {
-      '一级标题': instance.primaryTitle,
-      '二级标题': instance.secondaryTitle,
-      '提交时间': Math.floor(new Date(submission.submittedAt).getTime()),
-      '疑似重复': submission.possibleDuplicate,
+    // Dynamic fields from form config
+    for (const field of fieldsConfig) {
+      if (!existingFields.has(field.label)) {
+        try {
+          const fieldType = field.type === 'select' ? 3 : field.type === 'tel' ? 13 : 1;
+          await ensureField(appToken, tableId, field.label, fieldType);
+          console.log(`[SyncQueue] Created dynamic field "${field.label}" in table ${tableId}`);
+        } catch (fieldErr: any) {
+          console.warn(`[SyncQueue] Failed to create dynamic field "${field.label}": ${fieldErr.message}`);
+        }
+      }
+    }
+
+    // Re-fetch fields after creation
+    const updatedFields = await getExistingFields(appToken, tableId);
+
+    // Build record fields — only include fields that actually exist in the table
+    const recordFields: Record<string, any> = {};
+
+    const addIfExists = (name: string, value: any) => {
+      if (updatedFields.has(name)) {
+        recordFields[name] = value;
+      } else {
+        console.warn(`[SyncQueue] Skipping field "${name}" — not found in Bitable table`);
+      }
     };
+
+    addIfExists('一级标题', instance.primaryTitle);
+    addIfExists('二级标题', instance.secondaryTitle);
+    addIfExists('提交时间', Math.floor(new Date(submission.submittedAt).getTime()));
+    addIfExists('疑似重复', submission.possibleDuplicate);
 
     // Map submitted fields to Bitable column names (using field labels)
     for (const field of fieldsConfig) {
       if (submittedFields[field.key] !== undefined) {
-        recordFields[field.label] = submittedFields[field.key];
+        addIfExists(field.label, submittedFields[field.key]);
       }
+    }
+
+    // Ensure the view exists for this 一级标题
+    try {
+      await ensureView(appToken, tableId, instance.primaryTitle);
+    } catch (viewErr: any) {
+      console.warn(`[SyncQueue] View ensure failed (non-fatal): ${viewErr.message}`);
     }
 
     // Create record in Bitable
