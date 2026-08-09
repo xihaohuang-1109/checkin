@@ -65,6 +65,7 @@ router.get('/f/:id', async (req: Request, res: Response) => {
       qrToken: instance.qrToken,
       qrExpiresAt: instance.qrExpiresAt?.toISOString() || null,
       qrStatus: instance.qrStatus,
+      checkinDeadline: instance.checkinDeadline?.toISOString() || null,
       createdAt: instance.createdAt.toISOString(),
       updatedAt: instance.updatedAt.toISOString(),
     },
@@ -171,6 +172,13 @@ router.post('/f/:id/submit', publicSubmitLimiter, async (req: Request, res: Resp
 
   const possibleDuplicate = await dedupCheck(id, deviceId, ipHash, ua, normalizedName);
 
+  // Determine check-in status based on deadline
+  const now = new Date();
+  let checkinStatus: string | null = null;
+  if (instance.checkinDeadline) {
+    checkinStatus = now <= new Date(instance.checkinDeadline) ? 'normal' : 'late';
+  }
+
   try {
     const submission = await db.submission.create({
       data: {
@@ -180,7 +188,8 @@ router.post('/f/:id/submit', publicSubmitLimiter, async (req: Request, res: Resp
         clientLat: clientLat || null,
         clientLng: clientLng || null,
         clientAccuracy: clientAccuracy || null,
-        submittedAt: new Date(),
+        submittedAt: now,
+        checkinStatus,
         ipHash,
         userAgent: ua.substring(0, 500),
         possibleDuplicate,

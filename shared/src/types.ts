@@ -23,6 +23,7 @@ export interface FormInstanceDTO {
   qrToken: string | null;
   qrExpiresAt: string | null;
   qrStatus: 'active' | 'expired' | null;
+  checkinDeadline: string | null;
   createdAt: string;
   updatedAt: string;
 }

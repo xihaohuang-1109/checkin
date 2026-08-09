@@ -8,6 +8,7 @@ interface FormInstance {
   secondaryTitle: string;
   qrStatus: string | null;
   qrExpiresAt: string | null;
+  checkinDeadline: string | null;
   submissionCount: number;
   createdAt: string;
   updatedAt: string;
@@ -16,6 +17,10 @@ interface FormInstance {
 interface BitableStatus {
   bootstrapped: boolean;
   appToken: string | null;
+  recordsTableId: string | null;
+  qrcodesTableId: string | null;
+  recordsViewId: string | null;
+  qrcodesViewId: string | null;
 }
 
 export function AdminDashboardPage() {
@@ -34,9 +39,16 @@ export function AdminDashboardPage() {
   const [manualAppToken, setManualAppToken] = useState('');
   const [manualRecordsTableId, setManualRecordsTableId] = useState('');
   const [manualQrcodesTableId, setManualQrcodesTableId] = useState('');
+  const [manualRecordsViewId, setManualRecordsViewId] = useState('');
+  const [manualQrcodesViewId, setManualQrcodesViewId] = useState('');
   const [availableTables, setAvailableTables] = useState<any[]>([]);
+  const [availableViews, setAvailableViews] = useState<any[]>([]);
   const [loadingTables, setLoadingTables] = useState(false);
+  const [loadingViews, setLoadingViews] = useState(false);
   const [admins, setAdmins] = useState<any[]>([]);
+  const [allowedTenantKey, setAllowedTenantKey] = useState<string | null>(null);
+  const [resettingTenant, setResettingTenant] = useState(false);
+  const [showConfigEdit, setShowConfigEdit] = useState(false);
 
   // Check auth
   useEffect(() => {
@@ -100,8 +112,33 @@ export function AdminDashboardPage() {
   useEffect(() => {
     if (activeTab === 'admins' && admin?.isSuperAdmin) {
       loadAdmins();
+      loadTenant();
     }
   }, [activeTab, admin, loadAdmins]);
+
+  const loadTenant = useCallback(async () => {
+    try {
+      const data = await api.getAllowedTenant();
+      setAllowedTenantKey(data.allowedTenantKey);
+    } catch (err) {
+      console.error('Failed to load tenant:', err);
+    }
+  }, []);
+
+  const handleResetTenant = async () => {
+    if (!confirm('确定要重置企业限制吗？这将清空所有管理员，下次登录的用户将成为新的超级管理员。')) return;
+    setResettingTenant(true);
+    try {
+      await api.resetTenant();
+      alert('企业限制已重置，所有管理员已清空。');
+      setAdmins([]);
+      setAllowedTenantKey(null);
+    } catch (err: any) {
+      alert(`重置失败: ${err.message}`);
+    } finally {
+      setResettingTenant(false);
+    }
+  };
 
   const handleToggleAdmin = async (id: string) => {
     if (!confirm('确定要切换该管理员的状态吗？')) return;
@@ -172,10 +209,13 @@ export function AdminDashboardPage() {
       await api.setBitableConfig(
         manualAppToken.trim(),
         manualRecordsTableId.trim(),
-        manualQrcodesTableId.trim() || undefined
+        manualQrcodesTableId.trim() || undefined,
+        manualRecordsViewId.trim() || undefined,
+        manualQrcodesViewId.trim() || undefined
       );
       alert('多维表格配置成功！');
       setShowManualConfig(false);
+      setShowConfigEdit(false);
       await loadData();
     } catch (err: any) {
       alert(`配置失败: ${err.message}`);
@@ -191,6 +231,41 @@ export function AdminDashboardPage() {
       alert(`获取表格列表失败: ${err.message}`);
     } finally {
       setLoadingTables(false);
+    }
+  };
+
+  const handleListViews = async (tableId: string) => {
+    if (!tableId) return;
+    setLoadingViews(true);
+    try {
+      const data = await api.listBitableViews(manualAppToken.trim(), tableId);
+      setAvailableViews(data.views);
+    } catch (err: any) {
+      alert(`获取视图列表失败: ${err.message}`);
+    } finally {
+      setLoadingViews(false);
+    }
+  };
+
+  // Open config editor with existing values pre-filled
+  const handleEditConfig = () => {
+    if (!showConfigEdit) {
+      // Opening — pre-fill with current values
+      if (bitableStatus) {
+        setManualAppToken(bitableStatus.appToken || '');
+        setManualRecordsTableId(bitableStatus.recordsTableId || '');
+        setManualQrcodesTableId(bitableStatus.qrcodesTableId || '');
+        setManualRecordsViewId(bitableStatus.recordsViewId || '');
+        setManualQrcodesViewId(bitableStatus.qrcodesViewId || '');
+      }
+      setShowConfigEdit(true);
+      setShowManualConfig(true);
+    } else {
+      // Closing
+      setShowConfigEdit(false);
+      setShowManualConfig(false);
+      setAvailableTables([]);
+      setAvailableViews([]);
     }
   };
 
@@ -263,25 +338,11 @@ export function AdminDashboardPage() {
               <p className="text-sm text-secondary" style={{ marginBottom: 8 }}>
                 从飞书多维表格 URL 中提取参数。URL 格式如：
                 <br />
-                <code>https://xxx.feishu.cn/base/APP_TOKEN?table=TABLE_ID</code>
+                <code>https://xxx.feishu.cn/base/APP_TOKEN?table=TABLE_ID&view=VIEW_ID</code>
               </p>
               <div className="form-group">
                 <label className="text-sm">App Token (base/ 后面那段)</label>
-                <input
-                  className="input"
-                  value={manualAppToken}
-                  onChange={(e) => setManualAppToken(e.target.value)}
-                  placeholder="DYnxb3HPoaD8nsso53JcNFUFnzb"
-                />
-              </div>
-              <div className="form-group">
-                <label className="text-sm">签到记录表 ID (table= 参数)</label>
-                <input
-                  className="input"
-                  value={manualRecordsTableId}
-                  onChange={(e) => setManualRecordsTableId(e.target.value)}
-                  placeholder="tblZGp1EbjYWaxBV"
-                />
+                <input className="input" value={manualAppToken} onChange={(e) => setManualAppToken(e.target.value)} placeholder="DYnxb3HPoaD8nsso53JcNFUFnzb" />
               </div>
               <div className="flex-row" style={{ gap: 8, marginBottom: 12 }}>
                 <button className="btn btn-outline text-sm" onClick={handleListTables} disabled={loadingTables || !manualAppToken.trim()}>
@@ -292,31 +353,50 @@ export function AdminDashboardPage() {
                 <div style={{ marginBottom: 12, padding: 8, background: 'var(--color-bg)', borderRadius: 6 }}>
                   <p className="text-sm" style={{ marginBottom: 6 }}>数据库中的表格：</p>
                   {availableTables.map((t: any) => (
-                    <div
-                      key={t.tableId}
-                      className="text-sm"
-                      style={{ padding: '4px 8px', cursor: 'pointer', borderRadius: 4, marginBottom: 2 }}
+                    <div key={t.tableId} className="text-sm" style={{ padding: '4px 8px', cursor: 'pointer', borderRadius: 4, marginBottom: 2 }}
                       onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-primary-light)')}
                       onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                      onClick={() => setManualRecordsTableId(t.tableId)}
-                    >
+                      onClick={() => { setManualRecordsTableId(t.tableId); handleListViews(t.tableId); }}>
                       <strong>{t.name}</strong> — <code>{t.tableId}</code>
                     </div>
                   ))}
                 </div>
               )}
               <div className="form-group">
-                <label className="text-sm">签到码表 ID (可选)</label>
-                <input
-                  className="input"
-                  value={manualQrcodesTableId}
-                  onChange={(e) => setManualQrcodesTableId(e.target.value)}
-                  placeholder="可选"
-                />
+                <label className="text-sm">签到记录表 ID <span className="required">*</span></label>
+                <input className="input" value={manualRecordsTableId} onChange={(e) => setManualRecordsTableId(e.target.value)} placeholder="tblZGp1EbjYWaxBV" />
               </div>
-              <button className="btn btn-primary" onClick={handleManualConfig}>
-                保存配置
-              </button>
+              <div className="flex-row" style={{ gap: 8, marginBottom: 12 }}>
+                <button className="btn btn-outline text-sm" onClick={() => handleListViews(manualRecordsTableId)} disabled={loadingViews || !manualRecordsTableId.trim()}>
+                  {loadingViews ? '加载中...' : '📋 查询该表视图'}
+                </button>
+              </div>
+              {availableViews.length > 0 && (
+                <div style={{ marginBottom: 12, padding: 8, background: 'var(--color-bg)', borderRadius: 6 }}>
+                  <p className="text-sm" style={{ marginBottom: 6 }}>该表中的视图：</p>
+                  {availableViews.map((v: any) => (
+                    <div key={v.viewId} className="text-sm" style={{ padding: '4px 8px', cursor: 'pointer', borderRadius: 4, marginBottom: 2 }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-primary-light)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                      onClick={() => setManualRecordsViewId(v.viewId)}>
+                      <strong>{v.name}</strong> ({v.type}) — <code>{v.viewId}</code>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="form-group">
+                <label className="text-sm">签到记录视图 ID (可选)</label>
+                <input className="input" value={manualRecordsViewId} onChange={(e) => setManualRecordsViewId(e.target.value)} placeholder="vewI06oXJ3" />
+              </div>
+              <div className="form-group">
+                <label className="text-sm">签到码表 ID (可选)</label>
+                <input className="input" value={manualQrcodesTableId} onChange={(e) => setManualQrcodesTableId(e.target.value)} placeholder="可选" />
+              </div>
+              <div className="form-group">
+                <label className="text-sm">签到码视图 ID (可选)</label>
+                <input className="input" value={manualQrcodesViewId} onChange={(e) => setManualQrcodesViewId(e.target.value)} placeholder="可选" />
+              </div>
+              <button className="btn btn-primary" onClick={handleManualConfig}>保存配置</button>
             </div>
           )}
         </div>
@@ -324,7 +404,82 @@ export function AdminDashboardPage() {
 
       {bitableStatus?.bootstrapped && (
         <div className="alert alert-success text-sm">
-          ✅ 多维表格已连接 · App Token: {bitableStatus.appToken}
+          <div className="flex-between">
+            <div>
+              ✅ 多维表格已连接 · App Token: <code>{bitableStatus.appToken}</code>
+              <br />
+              <span className="text-xs">记录表: {bitableStatus.recordsTableId || '-'}</span>
+              {bitableStatus.recordsViewId && <span className="text-xs"> · 视图: {bitableStatus.recordsViewId}</span>}
+              <br />
+              {bitableStatus.qrcodesTableId && <span className="text-xs">签到码表: {bitableStatus.qrcodesTableId}</span>}
+              {bitableStatus.qrcodesViewId && <span className="text-xs"> · 视图: {bitableStatus.qrcodesViewId}</span>}
+            </div>
+            <button className="btn btn-outline text-sm" onClick={handleEditConfig}>
+              {showConfigEdit ? '取消' : '✏️ 修改配置'}
+            </button>
+          </div>
+          {showConfigEdit && (
+            <div style={{ marginTop: 12, padding: 12, background: 'var(--color-bg)', borderRadius: 8 }}>
+              <p className="text-sm text-secondary" style={{ marginBottom: 8 }}>修改多维表格连接配置</p>
+              <div className="form-group">
+                <label className="text-sm">App Token</label>
+                <input className="input" value={manualAppToken} onChange={(e) => setManualAppToken(e.target.value)} />
+              </div>
+              <div className="flex-row" style={{ gap: 8, marginBottom: 12 }}>
+                <button className="btn btn-outline text-sm" onClick={handleListTables} disabled={loadingTables || !manualAppToken.trim()}>
+                  {loadingTables ? '加载中...' : '📋 查询已有表格'}
+                </button>
+              </div>
+              {availableTables.length > 0 && (
+                <div style={{ marginBottom: 12, padding: 8, background: 'var(--color-bg)', borderRadius: 6 }}>
+                  <p className="text-sm" style={{ marginBottom: 6 }}>数据库中的表格：</p>
+                  {availableTables.map((t: any) => (
+                    <div key={t.tableId} className="text-sm" style={{ padding: '4px 8px', cursor: 'pointer', borderRadius: 4, marginBottom: 2 }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-primary-light)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                      onClick={() => { setManualRecordsTableId(t.tableId); handleListViews(t.tableId); }}>
+                      <strong>{t.name}</strong> — <code>{t.tableId}</code>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="form-group">
+                <label className="text-sm">签到记录表 ID</label>
+                <input className="input" value={manualRecordsTableId} onChange={(e) => setManualRecordsTableId(e.target.value)} />
+              </div>
+              <div className="flex-row" style={{ gap: 8, marginBottom: 12 }}>
+                <button className="btn btn-outline text-sm" onClick={() => handleListViews(manualRecordsTableId)} disabled={loadingViews || !manualRecordsTableId.trim()}>
+                  {loadingViews ? '加载中...' : '📋 查询该表视图'}
+                </button>
+              </div>
+              {availableViews.length > 0 && (
+                <div style={{ marginBottom: 12, padding: 8, background: 'var(--color-bg)', borderRadius: 6 }}>
+                  <p className="text-sm" style={{ marginBottom: 6 }}>该表中的视图：</p>
+                  {availableViews.map((v: any) => (
+                    <div key={v.viewId} className="text-sm" style={{ padding: '4px 8px', cursor: 'pointer', borderRadius: 4, marginBottom: 2 }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-primary-light)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                      onClick={() => setManualRecordsViewId(v.viewId)}>
+                      <strong>{v.name}</strong> ({v.type}) — <code>{v.viewId}</code>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="form-group">
+                <label className="text-sm">签到记录视图 ID</label>
+                <input className="input" value={manualRecordsViewId} onChange={(e) => setManualRecordsViewId(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label className="text-sm">签到码表 ID</label>
+                <input className="input" value={manualQrcodesTableId} onChange={(e) => setManualQrcodesTableId(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label className="text-sm">签到码视图 ID</label>
+                <input className="input" value={manualQrcodesViewId} onChange={(e) => setManualQrcodesViewId(e.target.value)} />
+              </div>
+              <button className="btn btn-primary" onClick={handleManualConfig}>保存修改</button>
+            </div>
+          )}
         </div>
       )}
 
@@ -389,6 +544,7 @@ export function AdminDashboardPage() {
                     <th>二级标题</th>
                     <th>提交数</th>
                     <th>二维码</th>
+                    <th>截止时间</th>
                     <th>创建时间</th>
                     <th>操作</th>
                   </tr>
@@ -407,6 +563,11 @@ export function AdminDashboardPage() {
                         ) : (
                           <span className="badge badge-info">未生成</span>
                         )}
+                      </td>
+                      <td className="text-sm text-secondary">
+                        {inst.checkinDeadline
+                          ? new Date(inst.checkinDeadline).toLocaleString('zh-CN')
+                          : '-'}
                       </td>
                       <td className="text-sm text-secondary">
                         {new Date(inst.createdAt).toLocaleDateString('zh-CN')}
@@ -463,7 +624,8 @@ export function AdminDashboardPage() {
                   <tr>
                     <th>一级标题</th>
                     <th>二级标题</th>
-                    <th>提交时间</th>
+                    <th>签到时间</th>
+                    <th>签到状态</th>
                     <th>同步状态</th>
                     <th>疑似重复</th>
                     <th>错误信息</th>
@@ -476,6 +638,15 @@ export function AdminDashboardPage() {
                       <td>{sub.formInstance?.secondaryTitle || '-'}</td>
                       <td className="text-sm">
                         {new Date(sub.submittedAt).toLocaleString('zh-CN')}
+                      </td>
+                      <td>
+                        {sub.checkinStatus === 'late' ? (
+                          <span className="badge badge-danger">迟到</span>
+                        ) : sub.checkinStatus === 'normal' ? (
+                          <span className="badge badge-success">正常</span>
+                        ) : (
+                          <span className="badge badge-info">-</span>
+                        )}
                       </td>
                       <td>
                         {sub.syncStatus === 'synced' ? (
@@ -564,6 +735,23 @@ export function AdminDashboardPage() {
           <p className="text-sm text-secondary mb-16">
             其他飞书用户扫码登录后自动成为管理员。超级管理员可以启用/禁用其他管理员。
           </p>
+          {allowedTenantKey && (
+            <div className="alert alert-info text-sm" style={{ marginBottom: 16 }}>
+              <div className="flex-between">
+                <span>
+                  🔒 企业限制已启用 · Tenant Key: <code>{allowedTenantKey}</code>
+                </span>
+                <button
+                  className="btn btn-outline text-sm"
+                  style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
+                  onClick={handleResetTenant}
+                  disabled={resettingTenant}
+                >
+                  {resettingTenant ? '重置中...' : '重置企业限制'}
+                </button>
+              </div>
+            </div>
+          )}
           {admins.length === 0 ? (
             <div className="card text-center" style={{ padding: 40 }}>
               <p className="text-secondary">暂无管理员</p>

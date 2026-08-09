@@ -65,7 +65,8 @@ export async function syncSubmissionToBitable(submissionId: string): Promise<voi
     const requiredFields: Array<{ name: string; type: number }> = [
       { name: '一级标题', type: 1 },
       { name: '二级标题', type: 1 },
-      { name: '提交时间', type: 5 },
+      { name: '签到时间', type: 5 },
+      { name: '签到状态', type: 1 },
       { name: '疑似重复', type: 7 },
     ];
 
@@ -109,7 +110,8 @@ export async function syncSubmissionToBitable(submissionId: string): Promise<voi
 
     addIfExists('一级标题', instance.primaryTitle);
     addIfExists('二级标题', instance.secondaryTitle);
-    addIfExists('提交时间', Math.floor(new Date(submission.submittedAt).getTime()));
+    addIfExists('签到时间', Math.floor(new Date(submission.submittedAt).getTime()));
+    addIfExists('签到状态', submission.checkinStatus || 'normal');
     addIfExists('疑似重复', submission.possibleDuplicate);
 
     // Map submitted fields to Bitable column names (using field labels)

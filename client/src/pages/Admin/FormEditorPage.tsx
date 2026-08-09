@@ -38,6 +38,8 @@ export function AdminFormEditorPage() {
   const [useGeofence, setUseGeofence] = useState(false);
   const [gettingLocation, setGettingLocation] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [checkinDeadline, setCheckinDeadline] = useState('');
+  const [useDeadline, setUseDeadline] = useState(false);
 
   // QR generation
   const [qrResult, setQrResult] = useState<any>(null);
@@ -70,6 +72,10 @@ export function AdminFormEditorPage() {
           setGeofenceLng(inst.geofenceLng);
           setGeofenceRadiusM(inst.geofenceRadiusM || 100);
           setUseGeofence(true);
+        }
+        if (inst.checkinDeadline) {
+          setCheckinDeadline(inst.checkinDeadline.slice(0, 16));
+          setUseDeadline(true);
         }
         if (inst.qrToken) {
           setQrResult({
@@ -180,6 +186,7 @@ export function AdminFormEditorPage() {
         geofenceLat: useGeofence ? geofenceLat : null,
         geofenceLng: useGeofence ? geofenceLng : null,
         geofenceRadiusM: useGeofence ? geofenceRadiusM : null,
+        checkinDeadline: useDeadline && checkinDeadline ? new Date(checkinDeadline).toISOString() : null,
       };
 
       if (isEditing) {
@@ -444,6 +451,43 @@ export function AdminFormEditorPage() {
               </p>
             </div>
           </>
+        )}
+      </div>
+
+      {/* Check-in Deadline */}
+      <div className="card">
+        <div className="flex-between" style={{ marginBottom: 16 }}>
+          <h2 style={{ fontSize: 16 }}>签到截止时间</h2>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={useDeadline}
+              onChange={(e) => setUseDeadline(e.target.checked)}
+            />
+            启用截止时间
+          </label>
+        </div>
+
+        {!useDeadline && (
+          <p className="text-secondary text-sm">
+            未启用截止时间，所有签到均标记为"正常"
+          </p>
+        )}
+
+        {useDeadline && (
+          <div className="form-group">
+            <label className="form-label">截止时间</label>
+            <input
+              className="form-input"
+              type="datetime-local"
+              value={checkinDeadline}
+              onChange={(e) => setCheckinDeadline(e.target.value)}
+              style={{ width: 280 }}
+            />
+            <p className="form-hint">
+              截止时间前提交标记为"正常"，之后提交标记为"迟到"
+            </p>
+          </div>
         )}
       </div>
 

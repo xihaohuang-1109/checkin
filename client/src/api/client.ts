@@ -86,10 +86,10 @@ export const api = {
   bootstrapBitable() {
     return request('/admin/bootstrap-bitable', { method: 'POST' });
   },
-  setBitableConfig(appToken: string, recordsTableId: string, qrcodesTableId?: string) {
+  setBitableConfig(appToken: string, recordsTableId: string, qrcodesTableId?: string, recordsViewId?: string, qrcodesViewId?: string) {
     return request('/admin/set-bitable-config', {
       method: 'POST',
-      body: JSON.stringify({ appToken, recordsTableId, qrcodesTableId }),
+      body: JSON.stringify({ appToken, recordsTableId, qrcodesTableId, recordsViewId, qrcodesViewId }),
     });
   },
   retrySync() {
@@ -99,10 +99,23 @@ export const api = {
     const qs = appToken ? `?appToken=${encodeURIComponent(appToken)}` : '';
     return request(`/admin/bitable-tables${qs}`);
   },
+  listBitableViews(appToken?: string, tableId?: string) {
+    const params = new URLSearchParams();
+    if (appToken) params.set('appToken', appToken);
+    if (tableId) params.set('tableId', tableId);
+    const qs = params.toString();
+    return request(`/admin/bitable-views${qs ? '?' + qs : ''}`);
+  },
   listAdmins() {
     return request('/admin/admins');
   },
   toggleAdminActive(id: string) {
     return request(`/admin/admins/${id}/toggle-active`, { method: 'POST' });
+  },
+  getAllowedTenant() {
+    return request('/admin/allowed-tenant');
+  },
+  resetTenant() {
+    return request('/admin/reset-tenant', { method: 'POST' });
   },
 };

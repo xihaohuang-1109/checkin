@@ -121,6 +121,32 @@ router.get('/feishu/callback', async (req: Request, res: Response) => {
     const userData = await userRes.json();
     const userInfo = userData.data;
 
+    // Enterprise restriction: only allow users from the same Feishu tenant
+    const userTenantKey: string | undefined = userInfo.tenant_key;
+    if (!userTenantKey) {
+      console.error('[Feishu OAuth] No tenant_key in user info:', JSON.stringify(userInfo));
+      res.status(403).json({ error: '无法获取企业信息，请联系管理员' });
+      return;
+    }
+
+    const allowedTenant = await db.appConfig.findUnique({ where: { key: 'allowed_tenant_key' } });
+    if (allowedTenant) {
+      // Subsequent admin: must match the stored tenant
+      if (userTenantKey !== allowedTenant.value) {
+        console.warn(`[Feishu OAuth] Rejected login from tenant "${userTenantKey}" — allowed: "${allowedTenant.value}"`);
+        res.status(403).json({ error: '您的飞书账号不属于授权企业，无法登录管理后台' });
+        return;
+      }
+    } else {
+      // First admin ever: set the allowed tenant (use upsert to avoid race)
+      await db.appConfig.upsert({
+        where: { key: 'allowed_tenant_key' },
+        update: {}, // no-op if already set by a concurrent first login
+        create: { key: 'allowed_tenant_key', value: userTenantKey },
+      });
+      console.log(`[Feishu OAuth] Allowed tenant set to: ${userTenantKey}`);
+    }
+
     // Upsert admin user
     const tokenExpiresAt = new Date(Date.now() + expiresIn * 1000);
 

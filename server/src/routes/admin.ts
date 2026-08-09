@@ -36,6 +36,7 @@ router.get('/form-instances', async (_req: Request, res: Response) => {
       qrToken: i.qrToken,
       qrExpiresAt: i.qrExpiresAt?.toISOString() || null,
       qrStatus: i.qrStatus,
+      checkinDeadline: i.checkinDeadline?.toISOString() || null,
       createdAt: i.createdAt.toISOString(),
       updatedAt: i.updatedAt.toISOString(),
       submissionCount: i._count.submissions,
@@ -72,6 +73,7 @@ router.get('/form-instances/:id', async (req: Request, res: Response) => {
       qrToken: instance.qrToken,
       qrExpiresAt: instance.qrExpiresAt?.toISOString() || null,
       qrStatus: instance.qrStatus,
+      checkinDeadline: instance.checkinDeadline?.toISOString() || null,
       bitableAppToken: instance.bitableAppToken,
       bitableRecordsTableId: instance.bitableRecordsTableId,
       bitableQrcodesTableId: instance.bitableQrcodesTableId,
@@ -89,7 +91,7 @@ router.get('/form-instances/:id', async (req: Request, res: Response) => {
  */
 router.post('/form-instances', async (req: Request, res: Response) => {
   const db = getDb();
-  const { primaryTitle, secondaryTitle, fieldsConfig, geofenceLat, geofenceLng, geofenceRadiusM } = req.body;
+  const { primaryTitle, secondaryTitle, fieldsConfig, geofenceLat, geofenceLng, geofenceRadiusM, checkinDeadline } = req.body;
 
   if (!primaryTitle || !secondaryTitle) {
     res.status(400).json({ error: 'primaryTitle and secondaryTitle are required' });
@@ -106,6 +108,7 @@ router.post('/form-instances', async (req: Request, res: Response) => {
       geofenceLat: geofenceLat || null,
       geofenceLng: geofenceLng || null,
       geofenceRadiusM: geofenceRadiusM || null,
+      checkinDeadline: checkinDeadline ? new Date(checkinDeadline) : null,
       createdByAdminId: adminUserId,
     },
   });
@@ -120,6 +123,7 @@ router.post('/form-instances', async (req: Request, res: Response) => {
       geofenceLng: instance.geofenceLng,
       geofenceRadiusM: instance.geofenceRadiusM,
       qrExpiresAt: null,
+      checkinDeadline: instance.checkinDeadline?.toISOString() || null,
       createdAt: instance.createdAt.toISOString(),
       updatedAt: instance.updatedAt.toISOString(),
     },
@@ -133,7 +137,7 @@ router.post('/form-instances', async (req: Request, res: Response) => {
 router.put('/form-instances/:id', async (req: Request, res: Response) => {
   const db = getDb();
   const id = req.params.id as string;
-  const { primaryTitle, secondaryTitle, fieldsConfig, geofenceLat, geofenceLng, geofenceRadiusM } = req.body;
+  const { primaryTitle, secondaryTitle, fieldsConfig, geofenceLat, geofenceLng, geofenceRadiusM, checkinDeadline } = req.body;
 
   const existing = await db.formInstance.findUnique({ where: { id } });
   if (!existing) {
@@ -148,6 +152,9 @@ router.put('/form-instances/:id', async (req: Request, res: Response) => {
   if (geofenceLat !== undefined) updateData.geofenceLat = geofenceLat;
   if (geofenceLng !== undefined) updateData.geofenceLng = geofenceLng;
   if (geofenceRadiusM !== undefined) updateData.geofenceRadiusM = geofenceRadiusM;
+  if (checkinDeadline !== undefined) {
+    updateData.checkinDeadline = checkinDeadline ? new Date(checkinDeadline) : null;
+  }
 
   const instance = await db.formInstance.update({
     where: { id },
@@ -166,6 +173,7 @@ router.put('/form-instances/:id', async (req: Request, res: Response) => {
       qrToken: instance.qrToken,
       qrExpiresAt: instance.qrExpiresAt?.toISOString() || null,
       qrStatus: instance.qrStatus,
+      checkinDeadline: instance.checkinDeadline?.toISOString() || null,
       createdAt: instance.createdAt.toISOString(),
       updatedAt: instance.updatedAt.toISOString(),
     },
@@ -300,6 +308,7 @@ router.get('/submissions', async (req: Request, res: Response) => {
       submittedAt: s.submittedAt.toISOString(),
       syncStatus: s.syncStatus,
       syncError: s.syncError || null,
+      checkinStatus: s.checkinStatus || null,
       possibleDuplicate: s.possibleDuplicate,
       createdAt: s.createdAt.toISOString(),
     })),
@@ -393,22 +402,26 @@ router.get('/bitable-status', async (_req: Request, res: Response) => {
   const appToken = await db.appConfig.findUnique({ where: { key: 'bitable_app_token' } });
   const recordsTableId = await db.appConfig.findUnique({ where: { key: 'bitable_records_table_id' } });
   const qrcodesTableId = await db.appConfig.findUnique({ where: { key: 'bitable_qrcodes_table_id' } });
+  const recordsViewId = await db.appConfig.findUnique({ where: { key: 'bitable_records_view_id' } });
+  const qrcodesViewId = await db.appConfig.findUnique({ where: { key: 'bitable_qrcodes_view_id' } });
 
   res.json({
     bootstrapped: !!appToken,
     appToken: appToken?.value || null,
     recordsTableId: recordsTableId?.value || null,
     qrcodesTableId: qrcodesTableId?.value || null,
+    recordsViewId: recordsViewId?.value || null,
+    qrcodesViewId: qrcodesViewId?.value || null,
   });
 });
 
 /**
  * POST /api/admin/set-bitable-config
- * Manually configure an existing Bitable (skip auto-bootstrap).
+ * Configure or update an existing Bitable connection (supports re-configuration).
  */
 router.post('/set-bitable-config', async (req: Request, res: Response) => {
   const db = getDb();
-  const { appToken, recordsTableId, qrcodesTableId } = req.body;
+  const { appToken, recordsTableId, qrcodesTableId, recordsViewId, qrcodesViewId } = req.body;
 
   if (!appToken || !recordsTableId) {
     res.status(400).json({ error: 'appToken and recordsTableId are required' });
@@ -432,8 +445,22 @@ router.post('/set-bitable-config', async (req: Request, res: Response) => {
       create: { key: 'bitable_qrcodes_table_id', value: qrcodesTableId },
     });
   }
+  if (recordsViewId) {
+    await db.appConfig.upsert({
+      where: { key: 'bitable_records_view_id' },
+      update: { value: recordsViewId },
+      create: { key: 'bitable_records_view_id', value: recordsViewId },
+    });
+  }
+  if (qrcodesViewId) {
+    await db.appConfig.upsert({
+      where: { key: 'bitable_qrcodes_view_id' },
+      update: { value: qrcodesViewId },
+      create: { key: 'bitable_qrcodes_view_id', value: qrcodesViewId },
+    });
+  }
 
-  res.json({ success: true, appToken, recordsTableId, qrcodesTableId: qrcodesTableId || null });
+  res.json({ success: true, appToken, recordsTableId, qrcodesTableId: qrcodesTableId || null, recordsViewId: recordsViewId || null, qrcodesViewId: qrcodesViewId || null });
 });
 
 /**
@@ -495,6 +522,57 @@ router.get('/bitable-tables', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * GET /api/admin/bitable-views?appToken=xxx&tableId=xxx
+ * List all views in a specific Bitable table.
+ */
+router.get('/bitable-views', async (req: Request, res: Response) => {
+  try {
+    const db = getDb();
+    let appToken = (req.query.appToken as string) || undefined;
+    const tableId = (req.query.tableId as string) || undefined;
+
+    if (!appToken) {
+      const appTokenConfig = await db.appConfig.findUnique({ where: { key: 'bitable_app_token' } });
+      if (!appTokenConfig) {
+        res.status(400).json({ error: 'Bitable not configured yet. Please provide ?appToken=xxx or save config first.' });
+        return;
+      }
+      appToken = appTokenConfig.value;
+    }
+
+    if (!tableId) {
+      res.status(400).json({ error: 'tableId query parameter is required' });
+      return;
+    }
+
+    const { getTenantAccessToken } = await import('../services/feishu/tokenManager');
+    const { feishuRequest } = await import('../services/feishu/httpClient');
+    const token = await getTenantAccessToken();
+
+    const data = await feishuRequest<any>(
+      `/bitable/v1/apps/${appToken}/tables/${tableId}/views`,
+      { token }
+    );
+
+    if (data.code !== 0) {
+      res.status(500).json({ error: `Failed to list views (code=${data.code}): ${data.msg}` });
+      return;
+    }
+
+    res.json({
+      views: (data.data?.items || []).map((v: any) => ({
+        viewId: v.view_id,
+        name: v.view_name,
+        type: v.view_type,
+      })),
+    });
+  } catch (err: any) {
+    console.error('[ListViews] Failed:', err);
+    res.status(500).json({ error: err.message || 'Failed to list views' });
+  }
+});
+
 // ============================================================
 // Admin User Management (super admin only)
 // ============================================================
@@ -551,6 +629,34 @@ router.post('/admins/:id/toggle-active', requireSuperAdmin, async (req: Request,
   });
 
   res.json({ admin: updated });
+});
+
+// ============================================================
+// Tenant Key Management (super admin only)
+// ============================================================
+
+/**
+ * GET /api/admin/allowed-tenant
+ * Show the allowed tenant key (super admin only)
+ */
+router.get('/allowed-tenant', requireSuperAdmin, async (_req: Request, res: Response) => {
+  const db = getDb();
+  const config = await db.appConfig.findUnique({ where: { key: 'allowed_tenant_key' } });
+  res.json({ allowedTenantKey: config?.value || null });
+});
+
+/**
+ * POST /api/admin/reset-tenant
+ * Reset the allowed tenant key — allows first-admin from a new enterprise (super admin only)
+ */
+router.post('/reset-tenant', requireSuperAdmin, async (req: Request, res: Response) => {
+  const db = getDb();
+  await db.appConfig.deleteMany({ where: { key: 'allowed_tenant_key' } });
+  // Also delete all existing admin users so the next login becomes the new first admin
+  await db.adminUser.deleteMany({});
+  await db.session.deleteMany({});
+  console.log('[Admin] Tenant key reset — all admins cleared');
+  res.json({ success: true, message: 'Tenant key and all admin users cleared. Next login will set the new tenant.' });
 });
 
 export default router;

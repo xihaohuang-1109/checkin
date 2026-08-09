@@ -43,6 +43,7 @@ model FormInstance {
   qrToken             String?
   qrExpiresAt         DateTime?
   qrStatus            String?      // "active" | "expired"
+  checkinDeadline     DateTime?    // if set, submissions after this time are marked "late"
   bitableAppToken     String?
   bitableRecordsTableId String?
   bitableQrcodesTableId String?
@@ -68,6 +69,7 @@ model Submission {
   userAgent         String?
   possibleDuplicate Boolean       @default(false)
   syncStatus        String        @default("pending") // "pending" | "synced" | "failed"
+  checkinStatus     String?       // "normal" | "late" — determined by checkinDeadline
   bitableRecordId   String?
   syncError         String?
   createdAt         DateTime      @default(now())

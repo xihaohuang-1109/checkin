@@ -225,6 +225,16 @@ export function PublicFormPage() {
             {instance.secondaryTitle}
           </p>
         )}
+        {instance?.checkinDeadline && (
+          <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 6 }}>
+            ⏰ 截止时间: {new Date(instance.checkinDeadline).toLocaleString('zh-CN')}
+            {new Date() > new Date(instance.checkinDeadline) ? (
+              <span style={{ color: 'var(--color-danger)', marginLeft: 8 }}>已截止，将标记为迟到</span>
+            ) : (
+              <span style={{ color: 'var(--color-success)', marginLeft: 8 }}>正常签到中</span>
+            )}
+          </p>
+        )}
       </div>
 
       {/* Geofence status — only show if geofence is configured */}
