@@ -159,7 +159,7 @@ export function AdminDashboardPage() {
   const handleListTables = async () => {
     setLoadingTables(true);
     try {
-      const data = await api.listBitableTables();
+      const data = await api.listBitableTables(manualAppToken.trim());
       setAvailableTables(data.tables);
     } catch (err: any) {
       alert(`获取表格列表失败: ${err.message}`);

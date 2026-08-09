@@ -452,16 +452,21 @@ router.post('/retry-sync', async (_req: Request, res: Response) => {
 });
 
 /**
- * GET /api/admin/bitable-tables
- * List all tables in the configured Bitable to help verify table IDs.
+ * GET /api/admin/bitable-tables?appToken=xxx
+ * List all tables in a Bitable (accepts appToken as query param or reads from saved config).
  */
-router.get('/bitable-tables', async (_req: Request, res: Response) => {
+router.get('/bitable-tables', async (req: Request, res: Response) => {
   try {
     const db = getDb();
-    const appTokenConfig = await db.appConfig.findUnique({ where: { key: 'bitable_app_token' } });
-    if (!appTokenConfig) {
-      res.status(400).json({ error: 'Bitable not configured yet' });
-      return;
+    let appToken = (req.query.appToken as string) || undefined;
+
+    if (!appToken) {
+      const appTokenConfig = await db.appConfig.findUnique({ where: { key: 'bitable_app_token' } });
+      if (!appTokenConfig) {
+        res.status(400).json({ error: 'Bitable not configured yet. Please provide ?appToken=xxx or save config first.' });
+        return;
+      }
+      appToken = appTokenConfig.value;
     }
 
     const { getTenantAccessToken } = await import('../services/feishu/tokenManager');
@@ -469,7 +474,7 @@ router.get('/bitable-tables', async (_req: Request, res: Response) => {
     const token = await getTenantAccessToken();
 
     const data = await feishuRequest<any>(
-      `/bitable/v1/apps/${appTokenConfig.value}/tables`,
+      `/bitable/v1/apps/${appToken}/tables`,
       { token }
     );
 

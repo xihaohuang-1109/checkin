@@ -95,7 +95,8 @@ export const api = {
   retrySync() {
     return request('/admin/retry-sync', { method: 'POST' });
   },
-  listBitableTables() {
-    return request('/admin/bitable-tables');
+  listBitableTables(appToken?: string) {
+    const qs = appToken ? `?appToken=${encodeURIComponent(appToken)}` : '';
+    return request(`/admin/bitable-tables${qs}`);
   },
 };
