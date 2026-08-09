@@ -34,6 +34,8 @@ export function AdminDashboardPage() {
   const [manualAppToken, setManualAppToken] = useState('');
   const [manualRecordsTableId, setManualRecordsTableId] = useState('');
   const [manualQrcodesTableId, setManualQrcodesTableId] = useState('');
+  const [availableTables, setAvailableTables] = useState<any[]>([]);
+  const [loadingTables, setLoadingTables] = useState(false);
 
   // Check auth
   useEffect(() => {
@@ -154,6 +156,18 @@ export function AdminDashboardPage() {
     }
   };
 
+  const handleListTables = async () => {
+    setLoadingTables(true);
+    try {
+      const data = await api.listBitableTables();
+      setAvailableTables(data.tables);
+    } catch (err: any) {
+      alert(`获取表格列表失败: ${err.message}`);
+    } finally {
+      setLoadingTables(false);
+    }
+  };
+
   // Logout
   const handleLogout = async () => {
     await api.logout();
@@ -243,6 +257,28 @@ export function AdminDashboardPage() {
                   placeholder="tblZGp1EbjYWaxBV"
                 />
               </div>
+              <div className="flex-row" style={{ gap: 8, marginBottom: 12 }}>
+                <button className="btn btn-outline text-sm" onClick={handleListTables} disabled={loadingTables || !manualAppToken.trim()}>
+                  {loadingTables ? '加载中...' : '📋 查询已有表格'}
+                </button>
+              </div>
+              {availableTables.length > 0 && (
+                <div style={{ marginBottom: 12, padding: 8, background: 'var(--color-bg)', borderRadius: 6 }}>
+                  <p className="text-sm" style={{ marginBottom: 6 }}>数据库中的表格：</p>
+                  {availableTables.map((t: any) => (
+                    <div
+                      key={t.tableId}
+                      className="text-sm"
+                      style={{ padding: '4px 8px', cursor: 'pointer', borderRadius: 4, marginBottom: 2 }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-primary-light)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                      onClick={() => setManualRecordsTableId(t.tableId)}
+                    >
+                      <strong>{t.name}</strong> — <code>{t.tableId}</code>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="form-group">
                 <label className="text-sm">签到码表 ID (可选)</label>
                 <input

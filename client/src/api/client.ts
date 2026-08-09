@@ -95,4 +95,7 @@ export const api = {
   retrySync() {
     return request('/admin/retry-sync', { method: 'POST' });
   },
+  listBitableTables() {
+    return request('/admin/bitable-tables');
+  },
 };

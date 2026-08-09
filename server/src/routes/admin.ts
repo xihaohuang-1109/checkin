@@ -451,4 +451,43 @@ router.post('/retry-sync', async (_req: Request, res: Response) => {
   }
 });
 
+/**
+ * GET /api/admin/bitable-tables
+ * List all tables in the configured Bitable to help verify table IDs.
+ */
+router.get('/bitable-tables', async (_req: Request, res: Response) => {
+  try {
+    const db = getDb();
+    const appTokenConfig = await db.appConfig.findUnique({ where: { key: 'bitable_app_token' } });
+    if (!appTokenConfig) {
+      res.status(400).json({ error: 'Bitable not configured yet' });
+      return;
+    }
+
+    const { getTenantAccessToken } = await import('../services/feishu/tokenManager');
+    const { feishuRequest } = await import('../services/feishu/httpClient');
+    const token = await getTenantAccessToken();
+
+    const data = await feishuRequest<any>(
+      `/bitable/v1/apps/${appTokenConfig.value}/tables`,
+      { token }
+    );
+
+    if (data.code !== 0) {
+      res.status(500).json({ error: `Failed to list tables (code=${data.code}): ${data.msg}` });
+      return;
+    }
+
+    res.json({
+      tables: (data.data?.items || []).map((t: any) => ({
+        tableId: t.table_id,
+        name: t.name,
+      })),
+    });
+  } catch (err: any) {
+    console.error('[ListTables] Failed:', err);
+    res.status(500).json({ error: err.message || 'Failed to list tables' });
+  }
+});
+
 export default router;
