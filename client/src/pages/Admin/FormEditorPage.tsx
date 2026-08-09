@@ -56,6 +56,8 @@ export function AdminFormEditorPage() {
   const [selectedTableId, setSelectedTableId] = useState('');
   const [selectedViewId, setSelectedViewId] = useState('');
   const [bitableStatus, setBitableStatus] = useState<any>(null);
+  const [showTableDropdown, setShowTableDropdown] = useState(false);
+  const [showViewDropdown, setShowViewDropdown] = useState(false);
 
   // Check auth
   useEffect(() => {
@@ -352,122 +354,228 @@ export function AdminFormEditorPage() {
           )}
         </div>
 
-        <div className="flex-row" style={{ gap: 8, marginBottom: 16 }}>
-          <button
-            className="btn btn-outline text-sm"
-            onClick={handleListTables}
-            disabled={loadingTables || !bitableAppToken.trim()}
-          >
-            {loadingTables ? '加载中...' : '📋 浏览已有表格'}
-          </button>
-        </div>
-
-        {availableTables.length > 0 && (
-          <div style={{ marginBottom: 16, padding: 8, background: 'var(--color-bg-light)', borderRadius: 6 }}>
-            <p className="text-sm" style={{ marginBottom: 6, fontWeight: 500 }}>已有的表格（点击选中并自动填充一级标题）：</p>
-            {availableTables.map((t: any) => (
-              <div
-                key={t.tableId}
-                className="text-sm"
-                style={{
-                  padding: '6px 10px',
-                  cursor: 'pointer',
-                  borderRadius: 4,
-                  marginBottom: 2,
-                  background: selectedTableId === t.tableId ? 'var(--color-primary-light)' : 'transparent',
-                }}
-                onClick={() => handleSelectTable(t)}
-              >
-                <strong>{t.name}</strong> — <code style={{ fontSize: 11 }}>{t.tableId}</code>
-              </div>
-            ))}
-          </div>
-        )}
-
         {/* 一级标题 = Table */}
-        <div className="form-group">
+        <div className="form-group" style={{ position: 'relative' }}>
           <label className="form-label">一级标题 / 表格名称 <span className="required">*</span></label>
-          <input
-            className="form-input"
-            placeholder="例如：2024 伙伴赋能培训"
-            value={primaryTitle}
-            onChange={(e) => setPrimaryTitle(e.target.value)}
-          />
-          <p className="form-hint">作为多维表格中的表格名称，不同一级标题的签到记录归入不同的表格</p>
-        </div>
-
-        {selectedTableId && (
-          <div className="form-group">
-            <label className="form-label">已关联表格 ID</label>
+          <div style={{ display: 'flex', gap: 0, alignItems: 'stretch' }}>
             <input
               className="form-input"
-              value={selectedTableId}
-              readOnly
-              style={{ background: 'var(--color-bg-light)', fontSize: 13 }}
+              style={{ flex: 1, borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
+              placeholder="例如：2024 伙伴赋能培训"
+              value={primaryTitle}
+              onChange={(e) => setPrimaryTitle(e.target.value)}
+              onFocus={() => {
+                if (bitableAppToken.trim()) {
+                  handleListTables();
+                  setShowTableDropdown(true);
+                }
+              }}
             />
+            <button
+              className="btn btn-outline"
+              style={{
+                borderTopLeftRadius: 0,
+                borderBottomLeftRadius: 0,
+                borderLeft: 'none',
+                padding: '0 10px',
+              }}
+              title="浏览已有表格"
+              onClick={() => {
+                if (!bitableAppToken.trim()) {
+                  alert('请先输入多维表格 App Token');
+                  return;
+                }
+                handleListTables();
+                setShowTableDropdown(!showTableDropdown);
+              }}
+              disabled={loadingTables}
+            >
+              {loadingTables ? '⏳' : '▾'}
+            </button>
           </div>
-        )}
+          <p className="form-hint">作为多维表格中的表格名称，不同一级标题的签到记录归入不同的表格</p>
+
+          {showTableDropdown && (
+            <>
+              <div
+                style={{ position: 'fixed', inset: 0, zIndex: 99 }}
+                onClick={() => setShowTableDropdown(false)}
+              />
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  zIndex: 100,
+                  background: 'var(--color-bg)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius)',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                  maxHeight: 220,
+                  overflowY: 'auto',
+                  marginTop: 2,
+                }}
+              >
+                <div
+                  className="text-sm"
+                  style={{
+                    padding: '10px 12px',
+                    cursor: 'pointer',
+                    borderBottom: '1px solid var(--color-border)',
+                    color: 'var(--color-primary)',
+                    fontWeight: 600,
+                  }}
+                  onClick={() => {
+                    setPrimaryTitle('');
+                    setSelectedTableId('');
+                    setShowTableDropdown(false);
+                  }}
+                >
+                  ✨ 新建表格（请在下方输入名称）
+                </div>
+                {availableTables.map((t: any) => (
+                  <div
+                    key={t.tableId}
+                    className="text-sm"
+                    style={{
+                      padding: '8px 12px',
+                      cursor: 'pointer',
+                      background: selectedTableId === t.tableId ? 'var(--color-primary-light)' : 'transparent',
+                    }}
+                    onClick={() => {
+                      handleSelectTable(t);
+                      setShowTableDropdown(false);
+                    }}
+                  >
+                    <strong>{t.name}</strong>
+                    <span style={{ color: 'var(--color-text-secondary)', fontSize: 11, marginLeft: 8 }}>
+                      {t.tableId}
+                    </span>
+                  </div>
+                ))}
+                {availableTables.length === 0 && (
+                  <div className="text-sm" style={{ padding: '12px', color: 'var(--color-text-secondary)', textAlign: 'center' }}>
+                    暂无已有表格
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
 
         {/* Divider */}
         <div style={{ borderTop: '1px solid var(--color-border)', margin: '16px 0' }} />
 
-        {selectedTableId && (
-          <div className="flex-row" style={{ gap: 8, marginBottom: 12 }}>
-            <button
-              className="btn btn-outline text-sm"
-              onClick={() => handleListViews(selectedTableId)}
-              disabled={loadingViews}
-            >
-              {loadingViews ? '加载中...' : '📋 浏览该表视图'}
-            </button>
-          </div>
-        )}
-
-        {availableViews.length > 0 && (
-          <div style={{ marginBottom: 16, padding: 8, background: 'var(--color-bg-light)', borderRadius: 6 }}>
-            <p className="text-sm" style={{ marginBottom: 6, fontWeight: 500 }}>该表中的视图（点击选中并自动填充二级标题）：</p>
-            {availableViews.map((v: any) => (
-              <div
-                key={v.viewId}
-                className="text-sm"
-                style={{
-                  padding: '6px 10px',
-                  cursor: 'pointer',
-                  borderRadius: 4,
-                  marginBottom: 2,
-                  background: selectedViewId === v.viewId ? 'var(--color-primary-light)' : 'transparent',
-                }}
-                onClick={() => handleSelectView(v)}
-              >
-                <strong>{v.name}</strong> ({v.type}) — <code style={{ fontSize: 11 }}>{v.viewId}</code>
-              </div>
-            ))}
-          </div>
-        )}
-
         {/* 二级标题 = View */}
-        <div className="form-group">
+        <div className="form-group" style={{ position: 'relative' }}>
           <label className="form-label">二级标题 / 视图名称 <span className="required">*</span></label>
-          <input
-            className="form-input"
-            placeholder="例如：8月上海场"
-            value={secondaryTitle}
-            onChange={(e) => setSecondaryTitle(e.target.value)}
-          />
-          <p className="form-hint">作为表格中的视图名称，同一表格下按二级标题分组</p>
-        </div>
-
-        {selectedViewId && (
-          <div className="form-group">
-            <label className="form-label">已关联视图 ID</label>
+          <div style={{ display: 'flex', gap: 0, alignItems: 'stretch' }}>
             <input
               className="form-input"
-              value={selectedViewId}
-              readOnly
-              style={{ background: 'var(--color-bg-light)', fontSize: 13 }}
+              style={{ flex: 1, borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
+              placeholder="例如：8月上海场"
+              value={secondaryTitle}
+              onChange={(e) => setSecondaryTitle(e.target.value)}
+              onFocus={() => {
+                if (selectedTableId && bitableAppToken.trim()) {
+                  handleListViews(selectedTableId);
+                  setShowViewDropdown(true);
+                }
+              }}
             />
+            <button
+              className="btn btn-outline"
+              style={{
+                borderTopLeftRadius: 0,
+                borderBottomLeftRadius: 0,
+                borderLeft: 'none',
+                padding: '0 10px',
+              }}
+              title="浏览已有视图"
+              onClick={() => {
+                if (!selectedTableId) {
+                  alert('请先选择或输入一级标题（表格名称）');
+                  return;
+                }
+                handleListViews(selectedTableId);
+                setShowViewDropdown(!showViewDropdown);
+              }}
+              disabled={loadingViews}
+            >
+              {loadingViews ? '⏳' : '▾'}
+            </button>
           </div>
-        )}
+          <p className="form-hint">作为表格中的视图名称，同一表格下按二级标题分组</p>
+
+          {showViewDropdown && (
+            <>
+              <div
+                style={{ position: 'fixed', inset: 0, zIndex: 99 }}
+                onClick={() => setShowViewDropdown(false)}
+              />
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  zIndex: 100,
+                  background: 'var(--color-bg)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius)',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                  maxHeight: 220,
+                  overflowY: 'auto',
+                  marginTop: 2,
+                }}
+              >
+                <div
+                  className="text-sm"
+                  style={{
+                    padding: '10px 12px',
+                    cursor: 'pointer',
+                    borderBottom: '1px solid var(--color-border)',
+                    color: 'var(--color-primary)',
+                    fontWeight: 600,
+                  }}
+                  onClick={() => {
+                    setSecondaryTitle('');
+                    setSelectedViewId('');
+                    setShowViewDropdown(false);
+                  }}
+                >
+                  ✨ 新建视图（请在下方输入名称）
+                </div>
+                {availableViews.map((v: any) => (
+                  <div
+                    key={v.viewId}
+                    className="text-sm"
+                    style={{
+                      padding: '8px 12px',
+                      cursor: 'pointer',
+                      background: selectedViewId === v.viewId ? 'var(--color-primary-light)' : 'transparent',
+                    }}
+                    onClick={() => {
+                      handleSelectView(v);
+                      setShowViewDropdown(false);
+                    }}
+                  >
+                    <strong>{v.name}</strong>
+                    <span style={{ color: 'var(--color-text-secondary)', fontSize: 11, marginLeft: 8 }}>
+                      ({v.type})
+                    </span>
+                  </div>
+                ))}
+                {availableViews.length === 0 && (
+                  <div className="text-sm" style={{ padding: '12px', color: 'var(--color-text-secondary)', textAlign: 'center' }}>
+                    暂无已有视图
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Fields */}
