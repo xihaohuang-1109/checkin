@@ -18,6 +18,17 @@ const VALIDITY_OPTIONS = [
   { value: 30, label: '30 天 (一月)' },
 ];
 
+/**
+ * Convert a UTC ISO datetime string to local "YYYY-MM-DDTHH:mm" format
+ * for use in a datetime-local input. Preserves the exact minute the user set.
+ */
+function toLocalDatetimeLocal(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export function AdminFormEditorPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -99,7 +110,7 @@ export function AdminFormEditorPage() {
           setUseGeofence(true);
         }
         if (inst.checkinDeadline) {
-          setCheckinDeadline(inst.checkinDeadline.slice(0, 16));
+          setCheckinDeadline(toLocalDatetimeLocal(inst.checkinDeadline));
           setUseDeadline(true);
         }
         if (inst.qrToken) {
