@@ -47,4 +47,4 @@ ENV NODE_ENV=production
 # (prevents Render's port scan from cancelling the deploy when the
 #  database connection is slow). Tables are created as soon as the
 #  connection succeeds; the app retries on subsequent deploys if needed.
-CMD ["sh", "-c", "cd server && (npx prisma db push --skip-generate || true) & node dist/server/src/index.js"]
+CMD ["sh", "-c", "(cd server && npx prisma db push --skip-generate || true) & cd server && node dist/server/src/index.js"]
