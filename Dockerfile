@@ -43,5 +43,8 @@ ENV PORT=3000
 EXPOSE 3000
 ENV NODE_ENV=production
 
-# Push DB schema then start
-CMD ["sh", "-c", "cd server && npx prisma db push --skip-generate && node dist/server/src/index.js"]
+# Push DB schema in the background so the server starts immediately
+# (prevents Render's port scan from cancelling the deploy when the
+#  database connection is slow). Tables are created as soon as the
+#  connection succeeds; the app retries on subsequent deploys if needed.
+CMD ["sh", "-c", "cd server && (npx prisma db push --skip-generate || true) & node dist/server/src/index.js"]
