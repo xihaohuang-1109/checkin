@@ -11,7 +11,7 @@ services:
       - key: SESSION_SECRET
         generateValue: true
       - key: DATABASE_URL
-        sync: false
+        value: "postgresql://postgres:JSYwi1rVH1NdXZNa@db.mvbeozeafscrwslvtoqw.supabase.co:5432/postgres"
       - key: DEDUP_IP_SALT
         generateValue: true
       - key: PUBLIC_BASE_URL
