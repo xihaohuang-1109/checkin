@@ -14,7 +14,7 @@ const envSchema = z.object({
   FEISHU_APP_ID: z.string().min(1, 'FEISHU_APP_ID is required'),
   FEISHU_APP_SECRET: z.string().min(1, 'FEISHU_APP_SECRET is required'),
   FEISHU_REDIRECT_URI: z.string().url(),
-  DATABASE_URL: z.string().default('file:./dev.db'),
+  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required (PostgreSQL connection string)'),
   FEISHU_BITABLE_NAME: z.string().default('伙伴赋能培训签到信息表'),
   DEDUP_IP_SALT: z.string().min(8, 'DEDUP_IP_SALT must be at least 8 chars'),
 });

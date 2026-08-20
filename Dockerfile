@@ -38,9 +38,6 @@ COPY --from=client-builder /app/client/dist ./server/dist/client/dist
 # Generate Prisma client in runtime
 RUN cd server && npx prisma generate
 
-# Create data directory for SQLite (Render persistent disk mounts here)
-RUN mkdir -p /app/server/data
-
 # Expose port
 ENV PORT=3000
 EXPOSE 3000
