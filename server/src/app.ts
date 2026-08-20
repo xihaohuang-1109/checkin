@@ -50,6 +50,11 @@ export function createApp() {
   app.use('/api', publicRoutes);
   app.use('/api/admin', adminRoutes);
 
+  // Health check (lightweight — used by uptime monitors & keep-alive pings)
+  app.get('/api/health', (_req, res) => {
+    res.json({ ok: true, time: new Date().toISOString() });
+  });
+
   // Serve static client build
   const clientDist = path.resolve(__dirname, '../../client/dist');
   app.use(express.static(clientDist));
